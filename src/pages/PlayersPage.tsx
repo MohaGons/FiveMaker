@@ -7,17 +7,22 @@ import { SiteHeader } from '../shared/components/layout/SiteHeader';
 import { Modal } from '../shared/components/ui/Modal';
 
 export function PlayersPage() {
-  const { players, addPlayer, updatePlayer, removePlayer } = usePlayers();
+  const { players, isLoading, error, addPlayer, updatePlayer, removePlayer } = usePlayers();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function openAddForm() {
     setEditingPlayer(null);
+    setFormError(null);
     setIsFormOpen(true);
   }
 
   function openEditForm(player: Player) {
     setEditingPlayer(player);
+    setFormError(null);
     setIsFormOpen(true);
   }
 
@@ -25,9 +30,14 @@ export function PlayersPage() {
     setIsFormOpen(false);
   }
 
-  function handleDelete(player: Player) {
-    if (window.confirm(`Supprimer ${player.name} de la liste ?`)) {
-      removePlayer(player.id);
+  async function handleDelete(player: Player) {
+    if (!window.confirm(`Supprimer ${player.name} de la liste ?`)) return;
+
+    setDeleteError(null);
+    try {
+      await removePlayer(player.id);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Suppression impossible.');
     }
   }
 
@@ -51,7 +61,15 @@ export function PlayersPage() {
           </button>
         </div>
 
-        {players.length === 0 ? (
+        {deleteError && (
+          <p className="mb-4 text-sm text-red-600 dark:text-red-400">{deleteError}</p>
+        )}
+
+        {isLoading ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Chargement des joueurs...</p>
+        ) : error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        ) : players.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 p-12 text-center text-gray-500 dark:border-gray-700 dark:text-gray-400">
             Aucun joueur pour l'instant. Ajoute ton premier joueur pour commencer.
           </div>
@@ -78,15 +96,25 @@ export function PlayersPage() {
           key={editingPlayer?.id ?? 'new'}
           initialPlayer={editingPlayer ?? undefined}
           onCancel={closeForm}
-          onSubmit={(input) => {
-            if (editingPlayer) {
-              updatePlayer(editingPlayer.id, input);
-            } else {
-              addPlayer(input);
+          isSubmitting={isSubmitting}
+          onSubmit={async (input) => {
+            setIsSubmitting(true);
+            setFormError(null);
+            try {
+              if (editingPlayer) {
+                await updatePlayer(editingPlayer.id, input);
+              } else {
+                await addPlayer(input);
+              }
+              closeForm();
+            } catch (err) {
+              setFormError(err instanceof Error ? err.message : 'Enregistrement impossible.');
+            } finally {
+              setIsSubmitting(false);
             }
-            closeForm();
           }}
         />
+        {formError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{formError}</p>}
       </Modal>
     </div>
   );

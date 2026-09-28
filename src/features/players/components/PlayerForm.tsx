@@ -8,6 +8,7 @@ interface PlayerFormProps {
   initialPlayer?: Player;
   onSubmit: (input: PlayerInput) => void;
   onCancel: () => void;
+  isSubmitting?: boolean;
 }
 
 const SKILL_LEVELS = [1, 2, 3, 4, 5] as const;
@@ -17,7 +18,7 @@ const inputClassName =
 
 const labelClassName = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
 
-export function PlayerForm({ initialPlayer, onSubmit, onCancel }: PlayerFormProps) {
+export function PlayerForm({ initialPlayer, onSubmit, onCancel, isSubmitting = false }: PlayerFormProps) {
   const [name, setName] = useState(initialPlayer?.name ?? '');
   const [skillLevel, setSkillLevel] = useState<Player['skillLevel']>(initialPlayer?.skillLevel ?? 3);
   const [preferredPosition, setPreferredPosition] = useState<PlayerPosition>(
@@ -110,9 +111,10 @@ export function PlayerForm({ initialPlayer, onSubmit, onCancel }: PlayerFormProp
         </button>
         <button
           type="submit"
-          className="rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-700"
+          disabled={isSubmitting}
+          className="rounded-full bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {initialPlayer ? 'Enregistrer' : 'Ajouter le joueur'}
+          {isSubmitting ? 'Enregistrement...' : initialPlayer ? 'Enregistrer' : 'Ajouter le joueur'}
         </button>
       </div>
     </form>

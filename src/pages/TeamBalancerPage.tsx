@@ -8,22 +8,21 @@ import { SiteHeader } from '../shared/components/layout/SiteHeader';
 import type { ID } from '../shared/types/common';
 
 export function TeamBalancerPage() {
-  const { players } = usePlayers();
-  const [selectedIds, setSelectedIds] = useState<Set<ID>>(
-    () => new Set(players.map((player) => player.id)),
-  );
+  const { players, isLoading, error } = usePlayers();
+  // null = pas encore touché par l'utilisateur -> tous les joueurs chargés sont présents par défaut.
+  const [customSelectedIds, setCustomSelectedIds] = useState<Set<ID> | null>(null);
   const [teams, setTeams] = useState<[Team, Team] | null>(null);
 
+  const selectedIds = customSelectedIds ?? new Set(players.map((player) => player.id));
+
   function toggleSelection(id: ID) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setCustomSelectedIds(next);
   }
 
   function handleBalance() {
@@ -46,7 +45,11 @@ export function TeamBalancerPage() {
               Joueurs présents ({selectedIds.size})
             </h2>
 
-            {players.length === 0 ? (
+            {isLoading ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">Chargement des joueurs...</p>
+            ) : error ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            ) : players.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 Ajoute des joueurs avant de pouvoir équilibrer les équipes.
               </p>

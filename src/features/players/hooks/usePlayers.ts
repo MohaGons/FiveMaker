@@ -1,35 +1,48 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ID } from '../../../shared/types/common';
+import { deletePlayerRow, fetchPlayers, insertPlayer, updatePlayerRow } from '../api/playersApi';
 import type { Player } from '../types';
-
-const INITIAL_PLAYERS: Player[] = [
-  { id: '1', name: 'Karim Haddad', skillLevel: 5, preferredPosition: 'forward', isGuest: false },
-  { id: '2', name: 'Yanis Bouzid', skillLevel: 3, preferredPosition: 'goalkeeper', isGuest: false },
-  { id: '3', name: 'Thomas Renard', skillLevel: 2, preferredPosition: 'defender', isGuest: true },
-  { id: '4', name: 'Sofiane Amrani', skillLevel: 4, preferredPosition: 'midfielder', isGuest: false },
-  { id: '5', name: 'Lucas Petit', skillLevel: 3, preferredPosition: 'defender', isGuest: false },
-  { id: '6', name: 'Nordine Cherif', skillLevel: 4, preferredPosition: 'forward', isGuest: true },
-];
 
 export type PlayerInput = Omit<Player, 'id'>;
 
 export function usePlayers() {
-  const [players, setPlayers] = useState<Player[]>(INITIAL_PLAYERS);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  function addPlayer(input: PlayerInput): void {
-    const player: Player = { ...input, id: crypto.randomUUID() };
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchPlayers()
+      .then((data) => {
+        if (isMounted) setPlayers(data);
+      })
+      .catch((err: Error) => {
+        if (isMounted) setError(err.message);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function addPlayer(input: PlayerInput): Promise<void> {
+    const player = await insertPlayer(input);
     setPlayers((current) => [...current, player]);
   }
 
-  function updatePlayer(id: ID, input: PlayerInput): void {
-    setPlayers((current) =>
-      current.map((player) => (player.id === id ? { ...input, id } : player)),
-    );
+  async function updatePlayer(id: ID, input: PlayerInput): Promise<void> {
+    const player = await updatePlayerRow(id, input);
+    setPlayers((current) => current.map((existing) => (existing.id === id ? player : existing)));
   }
 
-  function removePlayer(id: ID): void {
+  async function removePlayer(id: ID): Promise<void> {
+    await deletePlayerRow(id);
     setPlayers((current) => current.filter((player) => player.id !== id));
   }
 
-  return { players, addPlayer, updatePlayer, removePlayer };
+  return { players, isLoading, error, addPlayer, updatePlayer, removePlayer };
 }
