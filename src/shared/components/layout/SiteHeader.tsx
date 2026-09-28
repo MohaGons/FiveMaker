@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 const NAV_LINKS = [
   { to: '/', label: 'Accueil' },
   { to: '/joueurs', label: 'Joueurs' },
+  { to: '/equipes', label: 'Équipes' },
 ];
 
 export function SiteHeader() {
