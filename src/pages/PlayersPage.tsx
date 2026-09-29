@@ -4,7 +4,8 @@ import { PlayerForm } from '../features/players/components/PlayerForm';
 import { usePlayers } from '../features/players/hooks/usePlayers';
 import type { Player } from '../features/players/types';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
-import { Modal } from '../shared/components/ui/Modal';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export function PlayersPage() {
   const { players, isLoading, error, addPlayer, updatePlayer, removePlayer } = usePlayers();
@@ -47,18 +48,14 @@ export function PlayersPage() {
       <main className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Joueurs</h1>
-            <p className="mt-2 text-gray-500 dark:text-gray-400">
+            <h1 className="text-3xl font-bold text-foreground">Joueurs</h1>
+            <p className="mt-2 text-muted-foreground">
               {players.length} joueur{players.length > 1 ? 's' : ''} dans ton groupe.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openAddForm}
-            className="shrink-0 rounded-full bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700"
-          >
+          <Button type="button" onClick={openAddForm} size="lg" className="shrink-0 rounded-full">
             + Ajouter un joueur
-          </button>
+          </Button>
         </div>
 
         {deleteError && (
@@ -66,11 +63,11 @@ export function PlayersPage() {
         )}
 
         {isLoading ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">Chargement des joueurs...</p>
+          <p className="text-sm text-muted-foreground">Chargement des joueurs...</p>
         ) : error ? (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         ) : players.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 p-12 text-center text-gray-500 dark:border-gray-700 dark:text-gray-400">
+          <div className="rounded-2xl border border-dashed p-12 text-center text-muted-foreground">
             Aucun joueur pour l'instant. Ajoute ton premier joueur pour commencer.
           </div>
         ) : (
@@ -87,35 +84,36 @@ export function PlayersPage() {
         )}
       </main>
 
-      <Modal
-        isOpen={isFormOpen}
-        onClose={closeForm}
-        title={editingPlayer ? 'Modifier le joueur' : 'Ajouter un joueur'}
-      >
-        <PlayerForm
-          key={editingPlayer?.id ?? 'new'}
-          initialPlayer={editingPlayer ?? undefined}
-          onCancel={closeForm}
-          isSubmitting={isSubmitting}
-          onSubmit={async (input) => {
-            setIsSubmitting(true);
-            setFormError(null);
-            try {
-              if (editingPlayer) {
-                await updatePlayer(editingPlayer.id, input);
-              } else {
-                await addPlayer(input);
+      <Dialog open={isFormOpen} onOpenChange={(open) => !open && closeForm()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingPlayer ? 'Modifier le joueur' : 'Ajouter un joueur'}</DialogTitle>
+          </DialogHeader>
+          <PlayerForm
+            key={editingPlayer?.id ?? 'new'}
+            initialPlayer={editingPlayer ?? undefined}
+            onCancel={closeForm}
+            isSubmitting={isSubmitting}
+            onSubmit={async (input) => {
+              setIsSubmitting(true);
+              setFormError(null);
+              try {
+                if (editingPlayer) {
+                  await updatePlayer(editingPlayer.id, input);
+                } else {
+                  await addPlayer(input);
+                }
+                closeForm();
+              } catch (err) {
+                setFormError(err instanceof Error ? err.message : 'Enregistrement impossible.');
+              } finally {
+                setIsSubmitting(false);
               }
-              closeForm();
-            } catch (err) {
-              setFormError(err instanceof Error ? err.message : 'Enregistrement impossible.');
-            } finally {
-              setIsSubmitting(false);
-            }
-          }}
-        />
-        {formError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{formError}</p>}
-      </Modal>
+            }}
+          />
+          {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '../features/auth/context/AuthProvider';
 import { HomePage } from '../pages/HomePage';
 import { LoginPage } from '../pages/LoginPage';
+import { MatchHistoryPage } from '../pages/MatchHistoryPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { PlayersPage } from '../pages/PlayersPage';
 import { TeamBalancerPage } from '../pages/TeamBalancerPage';
@@ -17,6 +18,7 @@ export function AppRouter() {
           <Route element={<ProtectedRoute />}>
             <Route path="/joueurs" element={<PlayersPage />} />
             <Route path="/equipes" element={<TeamBalancerPage />} />
+            <Route path="/historique" element={<MatchHistoryPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

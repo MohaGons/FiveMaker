@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 interface Feature {
   title: string;
@@ -101,21 +103,19 @@ const STEPS: Step[] = [
 
 function FeatureCard({ feature }: { feature: Feature }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-sm dark:border-gray-800 dark:bg-gray-900">
+    <Card className="p-6 text-left">
       <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-500/15 dark:text-purple-300">
         {feature.icon}
       </div>
-      <h3 className="mt-4 font-semibold text-gray-900 dark:text-gray-100">{feature.title}</h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-        {feature.description}
-      </p>
-    </div>
+      <h3 className="mt-4 font-semibold text-foreground">{feature.title}</h3>
+      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{feature.description}</p>
+    </Card>
   );
 }
 
 function HeroMockupCard() {
   return (
-    <div className="mx-auto w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-lg dark:border-gray-800 dark:bg-gray-900">
+    <Card className="mx-auto w-full max-w-sm p-5 shadow-lg">
       <div className="flex items-center justify-between">
         <span className="rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-700 dark:bg-purple-500/15 dark:text-purple-300">
           Prochain match
@@ -159,7 +159,7 @@ function HeroMockupCard() {
         </svg>
         Équipes équilibrées automatiquement
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -182,18 +182,17 @@ export function HomePage() {
               l'historique de vos matchs entre potes.
             </p>
             <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center md:justify-start">
-              <Link
-                to="/joueurs"
-                className="w-full rounded-full bg-purple-600 px-6 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 sm:w-auto"
-              >
+              <Button render={<Link to="/joueurs" />} size="lg" className="w-full rounded-full sm:w-auto">
                 Gérer mes joueurs
-              </Link>
-              <a
-                href="#fonctionnalites"
-                className="w-full rounded-full border border-gray-300 px-6 py-3 text-center text-sm font-semibold text-gray-700 transition hover:border-gray-400 sm:w-auto dark:border-gray-700 dark:text-gray-200 dark:hover:border-gray-600"
+              </Button>
+              <Button
+                render={<a href="#fonctionnalites" />}
+                variant="outline"
+                size="lg"
+                className="w-full rounded-full sm:w-auto"
               >
                 Voir les fonctionnalités
-              </a>
+              </Button>
             </div>
           </div>
 

@@ -1,6 +1,8 @@
 import { PlayerCard } from '../../players/components/PlayerCard';
 import type { Team } from '../types';
 import { getAverageSkill } from '../utils/balanceTeams';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 
 interface TeamColumnProps {
   team: Team;
@@ -10,11 +12,11 @@ interface TeamColumnProps {
 const ACCENT_CLASSES: Record<TeamColumnProps['accent'], { badge: string; border: string }> = {
   purple: {
     badge: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300',
-    border: 'border-purple-200 dark:border-purple-500/30',
+    border: 'ring-purple-200 dark:ring-purple-500/30',
   },
   orange: {
     badge: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
-    border: 'border-orange-200 dark:border-orange-500/30',
+    border: 'ring-orange-200 dark:ring-orange-500/30',
   },
 };
 
@@ -22,20 +24,18 @@ export function TeamColumn({ team, accent }: TeamColumnProps) {
   const classes = ACCENT_CLASSES[accent];
 
   return (
-    <div className={`rounded-2xl border ${classes.border} bg-white p-4 dark:bg-gray-900`}>
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-          {team.name} <span className="text-sm font-normal text-gray-400">({team.players.length})</span>
+    <Card className={`p-4 ring-2 ${classes.border}`}>
+      <div className="mb-1 flex items-center justify-between">
+        <h3 className="font-semibold text-foreground">
+          {team.name} <span className="text-sm font-normal text-muted-foreground">({team.players.length})</span>
         </h3>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${classes.badge}`}>
-          Niveau moyen {getAverageSkill(team).toFixed(1)}
-        </span>
+        <Badge className={classes.badge}>Niveau moyen {getAverageSkill(team).toFixed(1)}</Badge>
       </div>
       <div className="flex flex-col gap-3">
         {team.players.map((player) => (
           <PlayerCard key={player.id} player={player} />
         ))}
       </div>
-    </div>
+    </Card>
   );
 }

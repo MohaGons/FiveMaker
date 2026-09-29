@@ -3,13 +3,11 @@ import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
 import { supabase } from '../shared/lib/supabaseClient';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type Mode = 'password' | 'magic-link';
-
-const inputClassName =
-  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100';
-
-const labelClassName = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -77,78 +75,62 @@ export function LoginPage() {
     <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-white dark:from-gray-950 dark:via-gray-950 dark:to-gray-950">
       <SiteHeader />
       <main className="mx-auto flex max-w-md flex-col px-6 py-16">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-2xl font-bold text-foreground">
           {mode === 'password' && isSignUp ? 'Créer un compte' : 'Se connecter'}
         </h1>
 
-        <div className="mt-6 flex gap-1 rounded-full bg-gray-100 p-1 dark:bg-gray-800">
-          <button
+        <div className="mt-6 flex gap-1 rounded-full bg-muted p-1">
+          <Button
             type="button"
+            variant={mode === 'password' ? 'secondary' : 'ghost'}
             onClick={() => switchMode('password')}
-            className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition ${
-              mode === 'password'
-                ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
+            className="flex-1 rounded-full"
           >
             Mot de passe
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant={mode === 'magic-link' ? 'secondary' : 'ghost'}
             onClick={() => switchMode('magic-link')}
-            className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition ${
-              mode === 'magic-link'
-                ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
+            className="flex-1 rounded-full"
           >
             Lien magique
-          </button>
+          </Button>
         </div>
 
         <form
           onSubmit={mode === 'password' ? handlePasswordSubmit : handleMagicLinkSubmit}
           className="mt-6 flex flex-col gap-4"
         >
-          <div>
-            <label htmlFor="email" className={labelClassName}>
-              Email
-            </label>
-            <input
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
               id="email"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
-              className={`mt-1 ${inputClassName}`}
             />
           </div>
 
           {mode === 'password' && (
-            <div>
-              <label htmlFor="password" className={labelClassName}>
-                Mot de passe
-              </label>
-              <input
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="password">Mot de passe</Label>
+              <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
                 minLength={6}
-                className={`mt-1 ${inputClassName}`}
               />
             </div>
           )}
 
           {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
-          {infoMessage && <p className="text-sm text-purple-600 dark:text-purple-400">{infoMessage}</p>}
+          {infoMessage && <p className="text-sm text-primary">{infoMessage}</p>}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="rounded-full bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <Button type="submit" disabled={isSubmitting} className="rounded-full">
             {isSubmitting
               ? 'Chargement...'
               : mode === 'magic-link'
@@ -156,21 +138,22 @@ export function LoginPage() {
                 : isSignUp
                   ? 'Créer mon compte'
                   : 'Se connecter'}
-          </button>
+          </Button>
         </form>
 
         {mode === 'password' && (
-          <button
+          <Button
             type="button"
+            variant="link"
             onClick={() => {
               setIsSignUp((current) => !current);
               setErrorMessage(null);
               setInfoMessage(null);
             }}
-            className="mt-4 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="mt-4 text-muted-foreground"
           >
             {isSignUp ? 'Déjà un compte ? Se connecter' : "Pas de compte ? Créer un compte"}
-          </button>
+          </Button>
         )}
       </main>
     </div>
