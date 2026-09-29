@@ -12,10 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
 import type { ID } from '../shared/types/common';
 
+/** Un five oppose deux équipes de 5 joueurs maximum. */
+const MAX_PLAYERS = 10;
+
 export function TeamBalancerPage() {
   const { players, isLoading, error } = usePlayers();
   const { addMatch } = useMatches();
-  // null = pas encore touché par l'utilisateur -> tous les joueurs chargés sont présents par défaut.
+  // null = pas encore touché par l'utilisateur -> les premiers joueurs chargés (jusqu'à 10) sont présents par défaut.
   const [customSelectedIds, setCustomSelectedIds] = useState<Set<ID> | null>(null);
   const [teams, setTeams] = useState<[Team, Team] | null>(null);
   const [isSaveFormOpen, setIsSaveFormOpen] = useState(false);
@@ -23,13 +26,15 @@ export function TeamBalancerPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const selectedIds = customSelectedIds ?? new Set(players.map((player) => player.id));
+  const selectedIds =
+    customSelectedIds ?? new Set(players.slice(0, MAX_PLAYERS).map((player) => player.id));
+  const isSelectionLimitReached = selectedIds.size >= MAX_PLAYERS;
 
   function toggleSelection(id: ID) {
     const next = new Set(selectedIds);
     if (next.has(id)) {
       next.delete(id);
-    } else {
+    } else if (next.size < MAX_PLAYERS) {
       next.add(id);
     }
     setCustomSelectedIds(next);
@@ -56,7 +61,7 @@ export function TeamBalancerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-white dark:from-gray-950 dark:via-gray-950 dark:to-gray-950">
+    <div className="min-h-screen bg-background">
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-6 py-12">
         <h1 className="text-3xl font-bold text-foreground">Équilibrer les équipes</h1>
@@ -67,7 +72,7 @@ export function TeamBalancerPage() {
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,360px)_1fr]">
           <div>
             <h2 className="mb-3 font-semibold text-foreground">
-              Joueurs présents ({selectedIds.size})
+              Joueurs présents ({selectedIds.size}/{MAX_PLAYERS})
             </h2>
 
             {isLoading ? (
@@ -79,7 +84,19 @@ export function TeamBalancerPage() {
                 Ajoute des joueurs avant de pouvoir équilibrer les équipes.
               </p>
             ) : (
-              <PlayerSelector players={players} selectedIds={selectedIds} onToggle={toggleSelection} />
+              <>
+                <PlayerSelector
+                  players={players}
+                  selectedIds={selectedIds}
+                  onToggle={toggleSelection}
+                  selectionLimitReached={isSelectionLimitReached}
+                />
+                {isSelectionLimitReached && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Maximum atteint pour un five (10 joueurs, 2 équipes de 5).
+                  </p>
+                )}
+              </>
             )}
 
             <Button
@@ -97,7 +114,7 @@ export function TeamBalancerPage() {
             {teams ? (
               <>
                 <div className="grid gap-6 sm:grid-cols-2">
-                  <TeamColumn team={teams[0]} accent="purple" />
+                  <TeamColumn team={teams[0]} accent="green" />
                   <TeamColumn team={teams[1]} accent="orange" />
                 </div>
 

@@ -6,13 +6,13 @@ import { Card } from '@/components/ui/card';
 
 interface TeamColumnProps {
   team: Team;
-  accent: 'purple' | 'orange';
+  accent: 'green' | 'orange';
 }
 
 const ACCENT_CLASSES: Record<TeamColumnProps['accent'], { badge: string; border: string }> = {
-  purple: {
-    badge: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300',
-    border: 'ring-purple-200 dark:ring-purple-500/30',
+  green: {
+    badge: 'bg-primary/10 text-primary',
+    border: 'ring-primary/20',
   },
   orange: {
     badge: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',

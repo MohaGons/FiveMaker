@@ -4,6 +4,7 @@ import { HomePage } from '../pages/HomePage';
 import { LoginPage } from '../pages/LoginPage';
 import { MatchHistoryPage } from '../pages/MatchHistoryPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
+import { PlayerStatsPage } from '../pages/PlayerStatsPage';
 import { PlayersPage } from '../pages/PlayersPage';
 import { TeamBalancerPage } from '../pages/TeamBalancerPage';
 import { ProtectedRoute } from './ProtectedRoute';
@@ -19,6 +20,7 @@ export function AppRouter() {
             <Route path="/joueurs" element={<PlayersPage />} />
             <Route path="/equipes" element={<TeamBalancerPage />} />
             <Route path="/historique" element={<MatchHistoryPage />} />
+            <Route path="/statistiques" element={<PlayerStatsPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

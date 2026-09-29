@@ -43,7 +43,7 @@ export function PlayersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-purple-50 via-white to-white dark:from-gray-950 dark:via-gray-950 dark:to-gray-950">
+    <div className="min-h-screen bg-background">
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-6 py-12">
         <div className="mb-8 flex items-center justify-between gap-4">
