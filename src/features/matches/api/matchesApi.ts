@@ -76,20 +76,21 @@ function toRow(input: MatchInput) {
   };
 }
 
-export async function fetchMatches(): Promise<Match[]> {
+export async function fetchMatches(groupId: ID): Promise<Match[]> {
   const { data, error } = await supabase
     .from('matches')
     .select(MATCH_COLUMNS)
+    .eq('group_id', groupId)
     .order('played_at', { ascending: false });
 
   if (error) throw error;
   return (data as MatchRow[]).map(toMatch);
 }
 
-export async function insertMatch(input: MatchInput): Promise<Match> {
+export async function insertMatch(groupId: ID, input: MatchInput): Promise<Match> {
   const { data, error } = await supabase
     .from('matches')
-    .insert(toRow(input))
+    .insert({ ...toRow(input), group_id: groupId })
     .select(MATCH_COLUMNS)
     .single();
 

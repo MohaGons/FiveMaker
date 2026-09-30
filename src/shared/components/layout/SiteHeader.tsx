@@ -1,9 +1,11 @@
 import { Moon, Sun } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../features/auth/hooks/useAuth';
+import { useGroups } from '../../../features/groups/hooks/useGroups';
 import { useTheme } from '../../hooks/useTheme';
 import { supabase } from '../../lib/supabaseClient';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const NAV_LINKS = [
   { to: '/', label: 'Accueil' },
@@ -11,6 +13,7 @@ const NAV_LINKS = [
   { to: '/equipes', label: 'Équipes' },
   { to: '/historique', label: 'Matchs' },
   { to: '/statistiques', label: 'Stats' },
+  { to: '/groupe', label: 'Groupe' },
 ];
 
 function BallIcon() {
@@ -32,6 +35,7 @@ export function SiteHeader() {
   const location = useLocation();
   const { session } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { groups, currentGroup, selectGroup } = useGroups();
 
   return (
     <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
@@ -56,6 +60,26 @@ export function SiteHeader() {
               );
             })}
           </nav>
+
+          {/* Sélecteur affiché seulement quand il y a un choix à faire. */}
+          {session && currentGroup && groups.length > 1 && (
+            <Select
+              value={currentGroup.id}
+              onValueChange={(value) => value && selectGroup(value as string)}
+              items={groups.map((group) => ({ value: group.id, label: group.name }))}
+            >
+              <SelectTrigger size="sm" aria-label="Groupe affiché" className="max-w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={group.id}>
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           <Button
             type="button"

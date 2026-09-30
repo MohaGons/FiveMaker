@@ -35,20 +35,21 @@ function toRow(input: PlayerInput) {
   };
 }
 
-export async function fetchPlayers(): Promise<Player[]> {
+export async function fetchPlayers(groupId: ID): Promise<Player[]> {
   const { data, error } = await supabase
     .from('players')
     .select(PLAYER_COLUMNS)
+    .eq('group_id', groupId)
     .order('created_at', { ascending: true });
 
   if (error) throw error;
   return (data as PlayerRow[]).map(toPlayer);
 }
 
-export async function insertPlayer(input: PlayerInput): Promise<Player> {
+export async function insertPlayer(groupId: ID, input: PlayerInput): Promise<Player> {
   const { data, error } = await supabase
     .from('players')
-    .insert(toRow(input))
+    .insert({ ...toRow(input), group_id: groupId })
     .select(PLAYER_COLUMNS)
     .single();
 

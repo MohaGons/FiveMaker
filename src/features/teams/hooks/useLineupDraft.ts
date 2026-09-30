@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ID } from '../../../shared/types/common';
+import { useCurrentGroup } from '../../groups/hooks/useGroups';
 import { fetchLineupDraft, saveLineupDraft } from '../api/lineupDraftApi';
 import type { LineupDraft } from '../api/lineupDraftApi';
 import type { PairingConstraint, PairingRule } from '../types';
@@ -35,9 +36,11 @@ function isSamePair(constraint: PairingConstraint, [a, b]: [ID, ID]): boolean {
 
 /**
  * Composition du prochain match construite au fil des confirmations : joueurs retenus et conditions,
- * enregistrés dans Supabase pour les retrouver d'un jour et d'un appareil à l'autre.
+ * enregistrés dans Supabase et partagés par tout le groupe.
  */
 export function useLineupDraft() {
+  const { group, canEdit } = useCurrentGroup();
+  const groupId = group.id;
   const [draft, setDraft] = useState<LineupDraft>({ playerIds: [], constraints: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -48,15 +51,16 @@ export function useLineupDraft() {
   useEffect(() => {
     let isMounted = true;
 
-    fetchLineupDraft()
+    fetchLineupDraft(groupId)
       .then((stored) => {
         if (!isMounted) return;
         if (stored) {
           setDraft(stored);
         } else {
-          const legacyConstraints = loadLegacyConstraints();
+          // Première utilisation : on reprend (et enregistre) les conditions gardées dans le navigateur,
+          // si l'on a le droit de modifier le groupe.
+          const legacyConstraints = canEdit ? loadLegacyConstraints() : [];
           setDraft({ playerIds: [], constraints: legacyConstraints });
-          // Première utilisation : on enregistre tout de suite les conditions reprises du navigateur.
           if (legacyConstraints.length > 0) {
             setSaveStatus('saving');
             setChangeCount((count) => count + 1);
@@ -66,7 +70,7 @@ export function useLineupDraft() {
       .catch((err: Error) => {
         if (!isMounted) return;
         setLoadError(err.message);
-        setDraft({ playerIds: [], constraints: loadLegacyConstraints() });
+        setDraft({ playerIds: [], constraints: canEdit ? loadLegacyConstraints() : [] });
       })
       .finally(() => {
         if (isMounted) setIsLoading(false);
@@ -75,13 +79,13 @@ export function useLineupDraft() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [groupId, canEdit]);
 
   useEffect(() => {
     if (changeCount === 0) return;
 
     const timeout = setTimeout(() => {
-      saveLineupDraft(draft)
+      saveLineupDraft(groupId, draft)
         .then(() => {
           setSaveStatus('saved');
           forgetLegacyConstraints();
@@ -90,7 +94,7 @@ export function useLineupDraft() {
     }, SAVE_DELAY_MS);
 
     return () => clearTimeout(timeout);
-  }, [draft, changeCount]);
+  }, [groupId, draft, changeCount]);
 
   function update(change: (current: LineupDraft) => LineupDraft): void {
     setDraft(change);

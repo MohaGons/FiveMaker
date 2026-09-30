@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ID } from '../../../shared/types/common';
+import { useCurrentGroup } from '../../groups/hooks/useGroups';
 import { deleteAvatar, uploadAvatar } from '../api/avatarsApi';
 import { deletePlayerRow, fetchPlayers, insertPlayer, updatePlayerRow } from '../api/playersApi';
 import type { Player } from '../types';
@@ -16,7 +17,9 @@ function discardAvatar(url: string | undefined): void {
   if (url) deleteAvatar(url).catch(() => {});
 }
 
+/** Joueurs du groupe courant (la page est remontée quand on change de groupe). */
 export function usePlayers() {
+  const groupId = useCurrentGroup().group.id;
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +27,7 @@ export function usePlayers() {
   useEffect(() => {
     let isMounted = true;
 
-    fetchPlayers()
+    fetchPlayers(groupId)
       .then((data) => {
         if (isMounted) setPlayers(data);
       })
@@ -38,12 +41,12 @@ export function usePlayers() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [groupId]);
 
   async function addPlayer(details: PlayerDetails, avatar: AvatarChange = { type: 'keep' }): Promise<void> {
-    const avatarUrl = avatar.type === 'replace' ? await uploadAvatar(avatar.file) : undefined;
+    const avatarUrl = avatar.type === 'replace' ? await uploadAvatar(groupId, avatar.file) : undefined;
     try {
-      const player = await insertPlayer({ ...details, avatarUrl });
+      const player = await insertPlayer(groupId, { ...details, avatarUrl });
       setPlayers((current) => [...current, player]);
     } catch (err) {
       discardAvatar(avatarUrl);
@@ -55,7 +58,7 @@ export function usePlayers() {
     const previousUrl = players.find((player) => player.id === id)?.avatarUrl;
     const avatarUrl =
       avatar.type === 'replace'
-        ? await uploadAvatar(avatar.file)
+        ? await uploadAvatar(groupId, avatar.file)
         : avatar.type === 'remove'
           ? undefined
           : previousUrl;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { EditMatchForm } from '../features/matches/components/EditMatchForm';
 import { MatchCard } from '../features/matches/components/MatchCard';
 import { MatchResultForm } from '../features/matches/components/MatchResultForm';
+import { useCurrentGroup } from '../features/groups/hooks/useGroups';
 import { useMatches } from '../features/matches/hooks/useMatches';
 import type { MatchUpdate } from '../features/matches/hooks/useMatches';
 import type { Match } from '../features/matches/types';
@@ -13,6 +14,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 export function MatchHistoryPage() {
   const { matches, isLoading, error, updateMatch, removeMatch } = useMatches();
+  const { canEdit } = useCurrentGroup();
+  // Lecture seule pour les membres : pas de modification, d'annulation ni de suppression.
+  const editHandlers = canEdit ? { onEdit: openEditForm, onDelete: handleDelete } : {};
   const [actionError, setActionError] = useState<string | null>(null);
   const [scoringMatch, setScoringMatch] = useState<Match | null>(null);
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
@@ -99,29 +103,32 @@ export function MatchHistoryPage() {
                       <MatchCard
                         key={match.id}
                         match={match}
-                        onEdit={openEditForm}
-                        onDelete={handleDelete}
+                        {...editHandlers}
                         actions={
                           <>
                             <ShareTeamsButtons size="sm" getMessage={() => formatTeamsMessage(match.teams, match)} />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => handleCancel(match)}
-                              className="rounded-full"
-                            >
-                              Annuler le match
-                            </Button>
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                setActionError(null);
-                                setScoringMatch(match);
-                              }}
-                              className="rounded-full"
-                            >
-                              Saisir le score
-                            </Button>
+                            {canEdit && (
+                              <>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => handleCancel(match)}
+                                  className="rounded-full"
+                                >
+                                  Annuler le match
+                                </Button>
+                                <Button
+                                  type="button"
+                                  onClick={() => {
+                                    setActionError(null);
+                                    setScoringMatch(match);
+                                  }}
+                                  className="rounded-full"
+                                >
+                                  Saisir le score
+                                </Button>
+                              </>
+                            )}
                           </>
                         }
                       />
@@ -143,8 +150,7 @@ export function MatchHistoryPage() {
                       <MatchCard
                         key={match.id}
                         match={match}
-                        onEdit={openEditForm}
-                        onDelete={handleDelete}
+                        {...editHandlers}
                         actions={
                           match.status === 'completed' && (
                             <ShareTeamsButtons size="sm" getMessage={() => formatTeamsMessage(match.teams, match)} />

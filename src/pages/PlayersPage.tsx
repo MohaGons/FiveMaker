@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { PlayerCard } from '../features/players/components/PlayerCard';
+import { useCurrentGroup } from '../features/groups/hooks/useGroups';
 import { PlayerForm } from '../features/players/components/PlayerForm';
 import { usePlayers } from '../features/players/hooks/usePlayers';
 import type { Player } from '../features/players/types';
@@ -9,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 export function PlayersPage() {
   const { players, isLoading, error, addPlayer, updatePlayer, removePlayer } = usePlayers();
+  const { canEdit } = useCurrentGroup();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,11 +53,14 @@ export function PlayersPage() {
             <h1 className="text-3xl font-bold text-foreground">Joueurs</h1>
             <p className="mt-2 text-muted-foreground">
               {players.length} joueur{players.length > 1 ? 's' : ''} dans ton groupe.
+              {!canEdit && ' Seuls le créateur et les admins peuvent les modifier.'}
             </p>
           </div>
-          <Button type="button" onClick={openAddForm} size="lg" className="shrink-0 rounded-full">
-            + Ajouter un joueur
-          </Button>
+          {canEdit && (
+            <Button type="button" onClick={openAddForm} size="lg" className="shrink-0 rounded-full">
+              + Ajouter un joueur
+            </Button>
+          )}
         </div>
 
         {deleteError && (
@@ -68,7 +73,9 @@ export function PlayersPage() {
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         ) : players.length === 0 ? (
           <div className="rounded-2xl border border-dashed p-12 text-center text-muted-foreground">
-            Aucun joueur pour l'instant. Ajoute ton premier joueur pour commencer.
+            {canEdit
+              ? 'Aucun joueur pour l\'instant. Ajoute ton premier joueur pour commencer.'
+              : 'Aucun joueur pour l\'instant.'}
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -76,8 +83,8 @@ export function PlayersPage() {
               <PlayerCard
                 key={player.id}
                 player={player}
-                onEdit={openEditForm}
-                onDelete={handleDelete}
+                onEdit={canEdit ? openEditForm : undefined}
+                onDelete={canEdit ? handleDelete : undefined}
               />
             ))}
           </div>

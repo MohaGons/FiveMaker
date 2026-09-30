@@ -1,16 +1,16 @@
 import { supabase } from '../../../shared/lib/supabaseClient';
+import type { ID } from '../../../shared/types/common';
 import { resizeToSquareJpeg } from '../utils/resizeImage';
 
 const BUCKET = 'avatars';
 
-/** Envoie la photo dans "<uid>/<uuid>.jpg" (dossier imposé par les policies Storage) et renvoie son URL publique. */
-export async function uploadAvatar(file: File): Promise<string> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
-  if (!userId) throw new Error('Connecte-toi pour ajouter une photo.');
-
+/**
+ * Envoie la photo dans "<id du groupe>/<uuid>.jpg" (dossier imposé par les policies Storage : seuls
+ * le créateur et les admins du groupe y écrivent) et renvoie son URL publique.
+ */
+export async function uploadAvatar(groupId: ID, file: File): Promise<string> {
   const image = await resizeToSquareJpeg(file);
-  const path = `${userId}/${crypto.randomUUID()}.jpg`;
+  const path = `${groupId}/${crypto.randomUUID()}.jpg`;
 
   const { error } = await supabase.storage.from(BUCKET).upload(path, image, { contentType: 'image/jpeg' });
   if (error) throw error;

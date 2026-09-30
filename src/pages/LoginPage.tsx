@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
 import { supabase } from '../shared/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
@@ -9,10 +9,23 @@ import { Label } from '@/components/ui/label';
 
 type Mode = 'password' | 'magic-link';
 
+/** Transmis par la page d'origine (ex. une invitation) via la navigation. */
+interface LoginState {
+  from?: string;
+  /** Ouvrir directement sur la création de compte. */
+  signUp?: boolean;
+  /** Groupe qui a envoyé l'invitation, rappelé en haut de la page. */
+  inviteGroupName?: string;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const state = location.state as LoginState | null;
+  // Page demandée avant d'être redirigé ici (ex. un lien d'invitation), sinon la liste des joueurs.
+  const redirectTo = state?.from ?? '/joueurs';
   const [mode, setMode] = useState<Mode>('password');
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(state?.signUp ?? false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,7 +45,12 @@ export function LoginPage() {
     setInfoMessage(null);
 
     const { data, error } = isSignUp
-      ? await supabase.auth.signUp({ email, password })
+      ? await supabase.auth.signUp({
+          email,
+          password,
+          // Le lien de confirmation ramène à la page demandée (ex. l'invitation).
+          options: { emailRedirectTo: window.location.origin + redirectTo },
+        })
       : await supabase.auth.signInWithPassword({ email, password });
 
     setIsSubmitting(false);
@@ -47,7 +65,7 @@ export function LoginPage() {
       return;
     }
 
-    navigate('/joueurs');
+    navigate(redirectTo, { replace: true });
   }
 
   async function handleMagicLinkSubmit(event: FormEvent<HTMLFormElement>) {
@@ -58,7 +76,7 @@ export function LoginPage() {
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin + redirectTo },
     });
 
     setIsSubmitting(false);
@@ -75,6 +93,12 @@ export function LoginPage() {
     <div className="min-h-screen bg-background">
       <SiteHeader />
       <main className="mx-auto flex max-w-md flex-col px-6 py-16">
+        {state?.inviteGroupName && (
+          <p className="mb-6 rounded-lg bg-primary/10 px-4 py-3 text-sm text-foreground">
+            {isSignUp ? 'Crée ton compte' : 'Connecte-toi'} pour rejoindre le groupe{' '}
+            <span className="font-semibold">{state.inviteGroupName}</span>. Tu reviendras ensuite sur l'invitation.
+          </p>
+        )}
         <h1 className="text-2xl font-bold text-foreground">
           {mode === 'password' && isSignUp ? 'Créer un compte' : 'Se connecter'}
         </h1>

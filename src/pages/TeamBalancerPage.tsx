@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Check, CloudOff, Loader2, Shuffle, TriangleAlert } from 'lucide-react';
+import { useCurrentGroup } from '../features/groups/hooks/useGroups';
 import { SaveMatchForm } from '../features/matches/components/SaveMatchForm';
 import { useMatches } from '../features/matches/hooks/useMatches';
 import type { MatchInput } from '../features/matches/hooks/useMatches';
@@ -57,6 +58,7 @@ export function TeamBalancerPage() {
   const { players, isLoading: isLoadingPlayers, error } = usePlayers();
   const { matches, addMatch } = useMatches();
   const draft = useLineupDraft();
+  const { canEdit } = useCurrentGroup();
   const { constraints, addConstraint, removeConstraint } = draft;
   const { labels, updateLabel, getTeamName } = useTeamLabels();
   const [teams, setTeams] = useState<[Team, Team] | null>(null);
@@ -163,8 +165,9 @@ export function TeamBalancerPage() {
       <main className="mx-auto max-w-6xl px-6 py-12">
         <h1 className="text-3xl font-bold text-foreground">Équilibrer les équipes</h1>
         <p className="mt-2 text-muted-foreground">
-          Coche les joueurs au fur et à mesure qu'ils confirment : la composition est enregistrée, et l'appli te
-          dit quels profils recruter pour les places restantes.
+          {canEdit
+            ? "Coche les joueurs au fur et à mesure qu'ils confirment : la composition est enregistrée pour tout le groupe, et l'appli te dit quels profils recruter pour les places restantes."
+            : 'Composition en cours du prochain match. Seuls le créateur et les admins peuvent la modifier et former les équipes.'}
         </p>
         {draft.loadError && (
           <p className="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -180,7 +183,7 @@ export function TeamBalancerPage() {
               </h2>
               <div className="flex items-center gap-2">
                 <DraftSaveIndicator status={draft.saveStatus} />
-                {selectedIds.size > 0 && (
+                {canEdit && selectedIds.size > 0 && (
                   <Button type="button" variant="ghost" size="xs" onClick={handleClearSelection}>
                     Vider
                   </Button>
@@ -203,6 +206,7 @@ export function TeamBalancerPage() {
                   selectedIds={selectedIds}
                   onToggle={toggleSelection}
                   getLevel={getLevel}
+                  readOnly={!canEdit}
                   selectionLimitReached={isSelectionLimitReached}
                 />
                 {isSelectionLimitReached && (
@@ -214,10 +218,10 @@ export function TeamBalancerPage() {
                   players={players}
                   selectedIds={selectedIds}
                   constraints={constraints}
-                  onAdd={addConstraint}
-                  onRemove={removeConstraint}
+                  onAdd={canEdit ? addConstraint : undefined}
+                  onRemove={canEdit ? removeConstraint : undefined}
                 />
-                {ratedMatchCount > 0 && (
+                {canEdit && ratedMatchCount > 0 && (
                   <Label className="mt-6 flex items-start gap-2 text-sm font-normal">
                     <Checkbox
                       checked={useAdjustedLevels}
@@ -235,16 +239,18 @@ export function TeamBalancerPage() {
               </>
             )}
 
-            <Button
-              type="button"
-              onClick={() => handleBalance(false)}
-              disabled={selectedIds.size < 2}
-              size="lg"
-              className="mt-4 w-full rounded-full"
-            >
-              Équilibrer les équipes
-            </Button>
-            {selectedIds.size > 0 && selectedIds.size < MAX_PLAYERS && (
+            {canEdit && (
+              <Button
+                type="button"
+                onClick={() => handleBalance(false)}
+                disabled={selectedIds.size < 2}
+                size="lg"
+                className="mt-4 w-full rounded-full"
+              >
+                Équilibrer les équipes
+              </Button>
+            )}
+            {canEdit && selectedIds.size > 0 && selectedIds.size < MAX_PLAYERS && (
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 Tu peux déjà équilibrer, ou attendre que les {MAX_PLAYERS} joueurs soient là.
               </p>
@@ -295,17 +301,19 @@ export function TeamBalancerPage() {
                     <Shuffle />
                     Remélanger
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setSaveError(null);
-                      setIsSaveFormOpen(true);
-                    }}
-                    className="rounded-full"
-                  >
-                    Enregistrer ce match
-                  </Button>
+                  {canEdit && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setSaveError(null);
+                        setIsSaveFormOpen(true);
+                      }}
+                      className="rounded-full"
+                    >
+                      Enregistrer ce match
+                    </Button>
+                  )}
                   <ShareTeamsButtons getMessage={() => formatTeamsMessage(displayedTeams)} />
                   {balanceError && (
                     <p className="text-sm text-red-600 dark:text-red-400">{balanceError}</p>
@@ -331,8 +339,12 @@ export function TeamBalancerPage() {
             ) : (
               <div className="flex h-full min-h-[200px] items-center justify-center rounded-2xl border border-dashed p-12 text-center text-sm text-muted-foreground">
                 {selectedIds.size === MAX_PLAYERS
-                  ? 'Tout le monde est là ! Clique sur « Équilibrer les équipes ».'
-                  : 'Coche les joueurs qui ont confirmé : les équipes provisoires et les profils à recruter s\'afficheront ici.'}
+                  ? canEdit
+                    ? 'Tout le monde est là ! Clique sur « Équilibrer les équipes ».'
+                    : 'La composition est complète.'
+                  : canEdit
+                    ? "Coche les joueurs qui ont confirmé : les équipes provisoires et les profils à recruter s'afficheront ici."
+                    : "Aucun joueur n'a encore été ajouté à la composition."}
               </div>
             )}
           </div>

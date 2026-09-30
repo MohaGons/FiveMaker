@@ -27,6 +27,8 @@ interface PlayerSelectorProps {
   selectionLimitReached?: boolean;
   /** Niveau ajusté selon les résultats ; sinon le niveau de la fiche est affiché. */
   getLevel?: GetLevel;
+  /** Consultation seule (membre sans droits) : les cases ne sont pas cochables. */
+  readOnly?: boolean;
 }
 
 /** En dessous, l'écart avec le niveau de la fiche n'est pas signalé. */
@@ -57,6 +59,7 @@ export function PlayerSelector({
   selectedIds,
   onToggle,
   selectionLimitReached = false,
+  readOnly = false,
   getLevel,
 }: PlayerSelectorProps) {
   const [query, setQuery] = useState('');
@@ -90,13 +93,14 @@ export function PlayerSelector({
         >
           {visiblePlayers.map((player) => {
             const isSelected = selectedIds.has(player.id);
-            const isDisabled = !isSelected && selectionLimitReached;
+            const isLimitReached = !isSelected && selectionLimitReached;
+            const isDisabled = readOnly || isLimitReached;
 
             return (
               <Label
                 key={player.id}
                 className={`flex h-11 shrink-0 items-center gap-3 px-4 font-normal ${
-                  isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                  readOnly ? 'cursor-default' : isLimitReached ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                 }`}
               >
                 <Checkbox checked={isSelected} disabled={isDisabled} onCheckedChange={() => onToggle(player.id)} />

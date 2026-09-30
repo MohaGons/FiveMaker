@@ -12,11 +12,12 @@ interface LineupDraftRow {
   pairing_constraints: PairingConstraint[];
 }
 
-/** Le brouillon du compte connecté, ou null s'il n'en a jamais enregistré. */
-export async function fetchLineupDraft(): Promise<LineupDraft | null> {
+/** Le brouillon du groupe, ou null s'il n'en a jamais été enregistré. */
+export async function fetchLineupDraft(groupId: ID): Promise<LineupDraft | null> {
   const { data, error } = await supabase
     .from('lineup_drafts')
     .select('player_ids, pairing_constraints')
+    .eq('group_id', groupId)
     .maybeSingle();
 
   if (error) throw error;
@@ -26,13 +27,9 @@ export async function fetchLineupDraft(): Promise<LineupDraft | null> {
   return { playerIds: row.player_ids, constraints: row.pairing_constraints };
 }
 
-export async function saveLineupDraft(draft: LineupDraft): Promise<void> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user.id;
-  if (!userId) throw new Error('Connecte-toi pour enregistrer la composition.');
-
+export async function saveLineupDraft(groupId: ID, draft: LineupDraft): Promise<void> {
   const { error } = await supabase.from('lineup_drafts').upsert({
-    user_id: userId,
+    group_id: groupId,
     player_ids: draft.playerIds,
     pairing_constraints: draft.constraints,
     updated_at: new Date().toISOString(),

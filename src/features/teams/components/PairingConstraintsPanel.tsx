@@ -11,8 +11,9 @@ interface PairingConstraintsPanelProps {
   players: Player[];
   selectedIds: Set<ID>;
   constraints: PairingConstraint[];
-  onAdd: (playerIds: [ID, ID], rule: PairingRule) => void;
-  onRemove: (id: ID) => void;
+  /** Absents en consultation seule (membre sans droits). */
+  onAdd?: (playerIds: [ID, ID], rule: PairingRule) => void;
+  onRemove?: (id: ID) => void;
 }
 
 const RULE_OPTIONS: { value: PairingRule; label: string }[] = [
@@ -68,7 +69,7 @@ export function PairingConstraintsPanel({
   const canAdd = firstId !== null && secondId !== null && firstId !== secondId;
 
   function handleAdd() {
-    if (!canAdd) return;
+    if (!canAdd || !onAdd) return;
     onAdd([firstId, secondId], rule);
     setFirstId(null);
     setSecondId(null);
@@ -78,46 +79,52 @@ export function PairingConstraintsPanel({
     <div className="mt-6">
       <h2 className="font-semibold text-foreground">Conditions</h2>
       <p className="mt-1 text-xs text-muted-foreground">
-        Force deux joueurs à jouer ensemble ou l'un contre l'autre.
+        {onAdd
+          ? "Force deux joueurs à jouer ensemble ou l'un contre l'autre."
+          : visibleConstraints.length > 0
+            ? "Joueurs qui doivent jouer ensemble ou l'un contre l'autre."
+            : 'Aucune condition pour ce match.'}
       </p>
 
-      <div className="mt-3 flex flex-col gap-2">
-        <div className="grid grid-cols-2 gap-2">
-          <PlayerSelect label="Premier joueur" players={presentPlayers} value={firstId} onChange={setFirstId} />
-          <PlayerSelect
-            label="Second joueur"
-            players={presentPlayers.filter((player) => player.id !== firstId)}
-            value={secondId}
-            onChange={setSecondId}
-          />
-        </div>
+      {onAdd && (
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <PlayerSelect label="Premier joueur" players={presentPlayers} value={firstId} onChange={setFirstId} />
+            <PlayerSelect
+              label="Second joueur"
+              players={presentPlayers.filter((player) => player.id !== firstId)}
+              value={secondId}
+              onChange={setSecondId}
+            />
+          </div>
 
-        <div className="flex gap-2">
-          {RULE_OPTIONS.map((option) => (
+          <div className="flex gap-2">
+            {RULE_OPTIONS.map((option) => (
+              <Button
+                key={option.value}
+                type="button"
+                size="sm"
+                variant={rule === option.value ? 'default' : 'outline'}
+                onClick={() => setRule(option.value)}
+                className="flex-1 rounded-full"
+              >
+                {option.label}
+              </Button>
+            ))}
             <Button
-              key={option.value}
               type="button"
               size="sm"
-              variant={rule === option.value ? 'default' : 'outline'}
-              onClick={() => setRule(option.value)}
-              className="flex-1 rounded-full"
+              variant="secondary"
+              onClick={handleAdd}
+              disabled={!canAdd}
+              aria-label="Ajouter la condition"
+              className="rounded-full"
             >
-              {option.label}
+              <Plus />
             </Button>
-          ))}
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={handleAdd}
-            disabled={!canAdd}
-            aria-label="Ajouter la condition"
-            className="rounded-full"
-          >
-            <Plus />
-          </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {visibleConstraints.length > 0 && (
         <ul className="mt-3 flex flex-col gap-2">
@@ -148,16 +155,18 @@ export function PairingConstraintsPanel({
                   {playersById.get(b)?.name}
                   {!isActive && <span className="text-xs text-muted-foreground"> · joueur absent</span>}
                 </span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => onRemove(constraint.id)}
-                  aria-label="Supprimer la condition"
-                  className="shrink-0"
-                >
-                  <X />
-                </Button>
+                {onRemove && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => onRemove(constraint.id)}
+                    aria-label="Supprimer la condition"
+                    className="shrink-0"
+                  >
+                    <X />
+                  </Button>
+                )}
               </li>
             );
           })}

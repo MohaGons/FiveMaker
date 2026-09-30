@@ -1,8 +1,9 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../features/auth/hooks/useAuth';
 
 export function ProtectedRoute() {
   const { session, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -13,7 +14,8 @@ export function ProtectedRoute() {
   }
 
   if (!session) {
-    return <Navigate to="/connexion" replace />;
+    // Retour à la page demandée après connexion (ex. un lien d'invitation).
+    return <Navigate to="/connexion" replace state={{ from: location.pathname }} />;
   }
 
   return <Outlet />;
