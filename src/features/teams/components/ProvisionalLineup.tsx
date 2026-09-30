@@ -14,6 +14,8 @@ interface ProvisionalLineupProps {
   teamNames: [string, string];
   teamColors: [string, string];
   getLevel?: GetLevel;
+  /** Peut lancer « Équilibrer » (créateur ou admin) : on l'invite à le faire. */
+  canBalance: boolean;
 }
 
 /** Au-delà, l'équilibre reste atteignable mais demande des recrues très fortes ou très faibles. */
@@ -49,7 +51,7 @@ function OpenSlot({ slot }: { slot: RecruitSlot }) {
  * Composition en cours : les joueurs déjà confirmés répartis au mieux, et pour chaque place libre
  * le profil à recruter pour que les équipes soient équilibrées une fois complètes.
  */
-export function ProvisionalLineup({ plan, teamNames, teamColors, getLevel }: ProvisionalLineupProps) {
+export function ProvisionalLineup({ plan, teamNames, teamColors, getLevel, canBalance }: ProvisionalLineupProps) {
   const missing = plan.slots.length;
   const needsExtremeRecruits = plan.slots.some(
     (slot) => slot.level <= 1 + EXTREME_LEVEL_MARGIN || slot.level >= 5 - EXTREME_LEVEL_MARGIN,
@@ -59,15 +61,22 @@ export function ProvisionalLineup({ plan, teamNames, teamColors, getLevel }: Pro
     <div>
       <div className="mb-4">
         <h2 className="font-semibold text-foreground">
-          Composition provisoire — il manque {missing} joueur{missing > 1 ? 's' : ''}
+          {missing === 0
+            ? 'Composition complète'
+            : `Composition provisoire — il manque ${missing} joueur${missing > 1 ? 's' : ''}`}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Les profils conseillés équilibreront les équipes une fois complètes. Clique sur « Équilibrer » quand
-          tout le monde est là : la répartition sera recalculée.
+          {missing > 0 && 'Les profils conseillés équilibreront les équipes une fois complètes. '}
+          {canBalance
+            ? missing === 0
+              ? 'Clique sur « Équilibrer les équipes » pour valider la répartition, la remélanger ou l\'ajuster.'
+              : 'Clique sur « Équilibrer » quand tout le monde est là : la répartition sera recalculée.'
+            : 'Le créateur ou un admin formera les équipes définitives.'}
         </p>
       </div>
 
-      {(needsExtremeRecruits || plan.remainingGap > NOTICEABLE_GAP) && (
+      {/* Avertissements sur les recrues : sans objet quand la composition est complète. */}
+      {missing > 0 && (needsExtremeRecruits || plan.remainingGap > NOTICEABLE_GAP) && (
         <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <p>

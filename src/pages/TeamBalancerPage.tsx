@@ -88,7 +88,8 @@ export function TeamBalancerPage() {
   const referenceLevel =
     players.length > 0 ? players.reduce((sum, player) => sum + levelOf(player), 0) / players.length : 3;
   const recruitPlan =
-    !teams && selectedPlayers.length > 0 && selectedPlayers.length < MAX_PLAYERS
+    // Même complète, la composition reste affichée (répartie au mieux) jusqu'à « Équilibrer ».
+    !teams && selectedPlayers.length > 0
       ? planRecruits(selectedPlayers, constraints, referenceLevel, getLevel)
       : null;
 
@@ -330,6 +331,7 @@ export function TeamBalancerPage() {
                   teamNames={[getTeamName(0), getTeamName(1)]}
                   teamColors={[labels[0].color, labels[1].color]}
                   getLevel={getLevel}
+                  canBalance={canEdit}
                 />
               ) : (
                 <div className="flex h-full min-h-[200px] items-center justify-center rounded-2xl border border-dashed p-12 text-center text-sm text-red-600 dark:text-red-400">
@@ -338,13 +340,10 @@ export function TeamBalancerPage() {
               )
             ) : (
               <div className="flex h-full min-h-[200px] items-center justify-center rounded-2xl border border-dashed p-12 text-center text-sm text-muted-foreground">
-                {selectedIds.size === MAX_PLAYERS
-                  ? canEdit
-                    ? 'Tout le monde est là ! Clique sur « Équilibrer les équipes ».'
-                    : 'La composition est complète.'
-                  : canEdit
-                    ? "Coche les joueurs qui ont confirmé : les équipes provisoires et les profils à recruter s'afficheront ici."
-                    : "Aucun joueur n'a encore été ajouté à la composition."}
+                {/* Affiché seulement sans joueur sélectionné : sinon, la composition provisoire prend la place. */}
+                {canEdit
+                  ? "Coche les joueurs qui ont confirmé : les équipes provisoires et les profils à recruter s'afficheront ici."
+                  : "Aucun joueur n'a encore été ajouté à la composition."}
               </div>
             )}
           </div>
