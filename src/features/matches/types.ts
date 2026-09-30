@@ -3,6 +3,12 @@ import type { Team } from '../teams/types';
 
 export type MatchStatus = 'scheduled' | 'completed' | 'cancelled';
 
+/** Contribution d'un joueur sur un match. */
+export interface MatchPlayerStats {
+  goals: number;
+  assists: number;
+}
+
 export interface MatchScore {
   teamA: number;
   teamB: number;
@@ -16,4 +22,7 @@ export interface Match {
   teams: [Team, Team];
   status: MatchStatus;
   score?: MatchScore;
+  /** Buts et passes par joueur ; les joueurs sans contribution sont absents. */
+  playerStats: Record<ID, MatchPlayerStats>;
+  mvpPlayerId?: ID;
 }

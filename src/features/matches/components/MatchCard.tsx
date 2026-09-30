@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { CalendarDays, MapPin, Pencil, Trash2 } from 'lucide-react';
+import { CalendarDays, MapPin, Pencil, Star, Trash2 } from 'lucide-react';
 import { getAverageSkill } from '../../teams/utils/balanceTeams';
 import { DEFAULT_TEAM_COLORS, tint } from '../../teams/utils/teamColors';
+import type { Player } from '../../players/types';
 import type { Match, MatchStatus } from '../types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,24 @@ function PitchOverlay() {
       <path d="M0 30 h36 v100 h-36" stroke="currentColor" strokeWidth="1.5" fill="none" />
       <path d="M400 30 h-36 v100 h36" stroke="currentColor" strokeWidth="1.5" fill="none" />
     </svg>
+  );
+}
+
+/** Nom du joueur, avec ses buts, passes et l'étoile d'homme du match s'il y en a. */
+function PlayerLine({ player, match }: { player: Player; match: Match }) {
+  const stats = match.playerStats[player.id];
+  const isMvp = match.mvpPlayerId === player.id;
+  const details = [
+    stats?.goals ? `${stats.goals} but${stats.goals > 1 ? 's' : ''}` : null,
+    stats?.assists ? `${stats.assists} passe${stats.assists > 1 ? 's' : ''}` : null,
+  ].filter(Boolean);
+
+  return (
+    <li className={cn(isMvp && 'font-medium text-foreground')}>
+      {isMvp && <Star aria-label="Homme du match" className="mr-1 inline h-3.5 w-3.5 fill-yellow-400 text-yellow-500" />}
+      {player.name}
+      {details.length > 0 && <span className="text-xs text-muted-foreground"> · {details.join(', ')}</span>}
+    </li>
   );
 }
 
@@ -141,12 +160,12 @@ export function MatchCard({ match, onEdit, onDelete, actions }: MatchCardProps) 
       <div className="mt-4 grid gap-3 border-t pt-4 text-sm text-muted-foreground sm:grid-cols-2">
         <ul className="text-right">
           {teamA.players.map((player) => (
-            <li key={player.id}>{player.name}</li>
+            <PlayerLine key={player.id} player={player} match={match} />
           ))}
         </ul>
         <ul>
           {teamB.players.map((player) => (
-            <li key={player.id}>{player.name}</li>
+            <PlayerLine key={player.id} player={player} match={match} />
           ))}
         </ul>
       </div>

@@ -24,6 +24,15 @@ export interface PlayerLevel {
   level: number;
   /** Nombre de matchs avec score ayant compté dans le calcul. */
   ratedMatches: number;
+  /** Niveau après chaque match avec score, dans l'ordre chronologique. */
+  history: LevelPoint[];
+}
+
+export interface LevelPoint {
+  match: Match;
+  /** Équipe du joueur sur ce match (0 = A, 1 = B). */
+  teamIndex: 0 | 1;
+  level: number;
 }
 
 function toRating(level: number): number {
@@ -46,7 +55,7 @@ function marginMultiplier(goalDifference: number): number {
 export function computePlayerLevels(matches: Match[], players: Player[]): Map<ID, PlayerLevel> {
   const ratings = new Map<ID, number>();
   const baseLevels = new Map<ID, number>();
-  const ratedMatches = new Map<ID, number>();
+  const histories = new Map<ID, LevelPoint[]>();
 
   for (const player of players) {
     baseLevels.set(player.id, player.skillLevel);
@@ -78,13 +87,14 @@ export function computePlayerLevels(matches: Match[], players: Player[]): Map<ID
     const resultA = goalsA > goalsB ? 1 : goalsA === goalsB ? 0.5 : 0;
     const deltaA = K_FACTOR * marginMultiplier(goalsA - goalsB) * (resultA - expectedA);
 
-    for (const [team, delta] of [
-      [teamA.players, deltaA],
-      [teamB.players, -deltaA],
+    for (const [team, delta, teamIndex] of [
+      [teamA.players, deltaA, 0],
+      [teamB.players, -deltaA, 1],
     ] as const) {
       for (const player of team) {
-        ratings.set(player.id, ratingOf(player) + delta);
-        ratedMatches.set(player.id, (ratedMatches.get(player.id) ?? 0) + 1);
+        const rating = ratingOf(player) + delta;
+        ratings.set(player.id, rating);
+        histories.set(player.id, [...(histories.get(player.id) ?? []), { match, teamIndex, level: toLevel(rating) }]);
       }
     }
   }
@@ -94,7 +104,8 @@ export function computePlayerLevels(matches: Match[], players: Player[]): Map<ID
     levels.set(id, {
       baseLevel: baseLevels.get(id)!,
       level: toLevel(rating),
-      ratedMatches: ratedMatches.get(id) ?? 0,
+      ratedMatches: histories.get(id)?.length ?? 0,
+      history: histories.get(id) ?? [],
     });
   }
   return levels;

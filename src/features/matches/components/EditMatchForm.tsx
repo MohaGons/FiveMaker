@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import type { MatchUpdate } from '../hooks/useMatches';
-import type { Match } from '../types';
+import type { ID } from '../../../shared/types/common';
+import type { Match, MatchPlayerStats } from '../types';
 import { fromInputValues, toDateInputValue, toTimeInputValue } from '../utils/dateInput';
+import { parseScoreInput } from '../utils/scoreInput';
+import { MatchPlayerStatsFields } from './MatchPlayerStatsFields';
 import { ScoreFields } from './ScoreFields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +25,8 @@ export function EditMatchForm({ match, onSubmit, onCancel, isSubmitting = false 
   const [location, setLocation] = useState(match.location ?? '');
   const [scoreA, setScoreA] = useState(match.score ? String(match.score.teamA) : '');
   const [scoreB, setScoreB] = useState(match.score ? String(match.score.teamB) : '');
+  const [playerStats, setPlayerStats] = useState<Record<ID, MatchPlayerStats>>(match.playerStats);
+  const [mvpPlayerId, setMvpPlayerId] = useState<ID | null>(match.mvpPlayerId ?? null);
 
   // Seuls les matchs à venir ont une heure ; seuls les matchs joués ont un score.
   const isScheduled = match.status === 'scheduled';
@@ -37,6 +42,8 @@ export function EditMatchForm({ match, onSubmit, onCancel, isSubmitting = false 
       location: location.trim() || null,
       ...(isCompleted && {
         score: hasScore ? { teamA: Number(scoreA), teamB: Number(scoreB) } : null,
+        playerStats,
+        mvpPlayerId,
       }),
     });
   }
@@ -89,6 +96,20 @@ export function EditMatchForm({ match, onSubmit, onCancel, isSubmitting = false 
             scoreB={scoreB}
             onScoreAChange={setScoreA}
             onScoreBChange={setScoreB}
+          />
+        </div>
+      )}
+
+      {isCompleted && (
+        <div className="border-t pt-4">
+          <p className="mb-3 text-sm font-medium text-foreground">Buteurs & passeurs (optionnel)</p>
+          <MatchPlayerStatsFields
+            teams={match.teams}
+            value={playerStats}
+            onChange={setPlayerStats}
+            mvpPlayerId={mvpPlayerId}
+            onMvpChange={setMvpPlayerId}
+            goalsScored={[parseScoreInput(scoreA), parseScoreInput(scoreB)]}
           />
         </div>
       )}

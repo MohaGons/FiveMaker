@@ -1,18 +1,20 @@
 export interface TeamColorOption {
   value: string;
   label: string;
+  /** Pastille utilisée dans les messages partagés (WhatsApp...). */
+  emoji: string;
 }
 
 /** Couleurs courantes de maillots et de chasubles. */
 export const TEAM_COLOR_OPTIONS: TeamColorOption[] = [
-  { value: '#16a34a', label: 'Vert' },
-  { value: '#f97316', label: 'Orange' },
-  { value: '#2563eb', label: 'Bleu' },
-  { value: '#dc2626', label: 'Rouge' },
-  { value: '#eab308', label: 'Jaune' },
-  { value: '#9333ea', label: 'Violet' },
-  { value: '#f5f5f5', label: 'Blanc' },
-  { value: '#171717', label: 'Noir' },
+  { value: '#16a34a', label: 'Vert', emoji: '🟢' },
+  { value: '#f97316', label: 'Orange', emoji: '🟠' },
+  { value: '#2563eb', label: 'Bleu', emoji: '🔵' },
+  { value: '#dc2626', label: 'Rouge', emoji: '🔴' },
+  { value: '#eab308', label: 'Jaune', emoji: '🟡' },
+  { value: '#9333ea', label: 'Violet', emoji: '🟣' },
+  { value: '#f5f5f5', label: 'Blanc', emoji: '⚪' },
+  { value: '#171717', label: 'Noir', emoji: '⚫' },
 ];
 
 export const DEFAULT_TEAM_NAMES: [string, string] = ['Équipe A', 'Équipe B'];

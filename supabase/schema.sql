@@ -52,6 +52,10 @@ create table if not exists public.matches (
 alter table public.matches add column if not exists team_a_color text;
 alter table public.matches add column if not exists team_b_color text;
 
+-- Buts et passes décisives par joueur ({ "<id joueur>": { "goals": 2, "assists": 1 } }) et homme du match.
+alter table public.matches add column if not exists player_stats jsonb not null default '{}'::jsonb;
+alter table public.matches add column if not exists mvp_player_id text;
+
 alter table public.matches enable row level security;
 
 drop policy if exists "Matches are managed by their owner" on public.matches;

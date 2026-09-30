@@ -7,12 +7,14 @@ import { computePlayerLevels } from '../features/matches/utils/playerLevels';
 import { usePlayers } from '../features/players/hooks/usePlayers';
 import { PairingConstraintsPanel } from '../features/teams/components/PairingConstraintsPanel';
 import { PlayerSelector } from '../features/teams/components/PlayerSelector';
+import { ShareTeamsButtons } from '../features/teams/components/ShareTeamsButtons';
 import { TeamsBoard } from '../features/teams/components/TeamsBoard';
 import { usePairingConstraints } from '../features/teams/hooks/usePairingConstraints';
 import { useTeamLabels } from '../features/teams/hooks/useTeamLabels';
 import type { Team } from '../features/teams/types';
 import { balanceTeams, findViolatedConstraints } from '../features/teams/utils/balanceTeams';
 import type { GetLevel } from '../features/teams/utils/balanceTeams';
+import { formatTeamsMessage } from '../features/teams/utils/shareMessage';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -238,6 +240,7 @@ export function TeamBalancerPage() {
                   >
                     Enregistrer ce match
                   </Button>
+                  <ShareTeamsButtons getMessage={() => formatTeamsMessage(displayedTeams)} />
                   {balanceError && (
                     <p className="text-sm text-red-600 dark:text-red-400">{balanceError}</p>
                   )}

@@ -1,10 +1,10 @@
 import { supabase } from '../../../shared/lib/supabaseClient';
 import type { ID } from '../../../shared/types/common';
 import type { Player } from '../../players/types';
-import type { Match, MatchScore, MatchStatus } from '../types';
+import type { Match, MatchPlayerStats, MatchScore, MatchStatus } from '../types';
 
 const MATCH_COLUMNS =
-  'id, played_at, location, status, score_team_a, score_team_b, team_a_name, team_a_players, team_a_color, team_b_name, team_b_players, team_b_color';
+  'id, played_at, location, status, score_team_a, score_team_b, team_a_name, team_a_players, team_a_color, team_b_name, team_b_players, team_b_color, player_stats, mvp_player_id';
 
 interface MatchRow {
   id: string;
@@ -19,6 +19,8 @@ interface MatchRow {
   team_b_name: string;
   team_b_players: Player[];
   team_b_color: string | null;
+  player_stats: Record<ID, MatchPlayerStats> | null;
+  mvp_player_id: string | null;
 }
 
 export interface MatchInput {
@@ -53,6 +55,8 @@ function toMatch(row: MatchRow): Match {
         color: row.team_b_color ?? undefined,
       },
     ],
+    playerStats: row.player_stats ?? {},
+    mvpPlayerId: row.mvp_player_id ?? undefined,
   };
 }
 
@@ -101,6 +105,9 @@ export interface MatchUpdate {
   status?: MatchStatus;
   /** null efface le score. */
   score?: MatchScore | null;
+  playerStats?: Record<ID, MatchPlayerStats>;
+  /** null efface l'homme du match. */
+  mvpPlayerId?: ID | null;
 }
 
 export async function updateMatchRow(id: ID, update: MatchUpdate): Promise<Match> {
@@ -112,6 +119,8 @@ export async function updateMatchRow(id: ID, update: MatchUpdate): Promise<Match
     patch.score_team_a = update.score?.teamA ?? null;
     patch.score_team_b = update.score?.teamB ?? null;
   }
+  if (update.playerStats !== undefined) patch.player_stats = update.playerStats;
+  if (update.mvpPlayerId !== undefined) patch.mvp_player_id = update.mvpPlayerId;
 
   const { data, error } = await supabase
     .from('matches')

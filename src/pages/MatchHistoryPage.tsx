@@ -5,6 +5,8 @@ import { MatchResultForm } from '../features/matches/components/MatchResultForm'
 import { useMatches } from '../features/matches/hooks/useMatches';
 import type { MatchUpdate } from '../features/matches/hooks/useMatches';
 import type { Match } from '../features/matches/types';
+import { ShareTeamsButtons } from '../features/teams/components/ShareTeamsButtons';
+import { formatTeamsMessage } from '../features/teams/utils/shareMessage';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -101,6 +103,7 @@ export function MatchHistoryPage() {
                         onDelete={handleDelete}
                         actions={
                           <>
+                            <ShareTeamsButtons size="sm" getMessage={() => formatTeamsMessage(match.teams, match)} />
                             <Button
                               type="button"
                               variant="ghost"
@@ -137,7 +140,17 @@ export function MatchHistoryPage() {
                 ) : (
                   <div className="flex flex-col gap-4">
                     {pastMatches.map((match) => (
-                      <MatchCard key={match.id} match={match} onEdit={openEditForm} onDelete={handleDelete} />
+                      <MatchCard
+                        key={match.id}
+                        match={match}
+                        onEdit={openEditForm}
+                        onDelete={handleDelete}
+                        actions={
+                          match.status === 'completed' && (
+                            <ShareTeamsButtons size="sm" getMessage={() => formatTeamsMessage(match.teams, match)} />
+                          )
+                        }
+                      />
                     ))}
                   </div>
                 )}
@@ -148,7 +161,7 @@ export function MatchHistoryPage() {
       </main>
 
       <Dialog open={scoringMatch !== null} onOpenChange={(open) => !open && setScoringMatch(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Score du match</DialogTitle>
           </DialogHeader>
@@ -165,7 +178,7 @@ export function MatchHistoryPage() {
       </Dialog>
 
       <Dialog open={editingMatch !== null} onOpenChange={(open) => !open && setEditingMatch(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Modifier le match</DialogTitle>
           </DialogHeader>
