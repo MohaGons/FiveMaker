@@ -1,10 +1,10 @@
 import { supabase } from '../../../shared/lib/supabaseClient';
 import type { ID } from '../../../shared/types/common';
 import type { Player } from '../../players/types';
-import type { Match, MatchStatus } from '../types';
+import type { Match, MatchScore, MatchStatus } from '../types';
 
 const MATCH_COLUMNS =
-  'id, played_at, location, status, score_team_a, score_team_b, team_a_name, team_a_players, team_b_name, team_b_players';
+  'id, played_at, location, status, score_team_a, score_team_b, team_a_name, team_a_players, team_a_color, team_b_name, team_b_players, team_b_color';
 
 interface MatchRow {
   id: string;
@@ -15,8 +15,10 @@ interface MatchRow {
   score_team_b: number | null;
   team_a_name: string;
   team_a_players: Player[];
+  team_a_color: string | null;
   team_b_name: string;
   team_b_players: Player[];
+  team_b_color: string | null;
 }
 
 export interface MatchInput {
@@ -38,8 +40,18 @@ function toMatch(row: MatchRow): Match {
         ? { teamA: row.score_team_a, teamB: row.score_team_b }
         : undefined,
     teams: [
-      { id: row.id + '-a', name: row.team_a_name, players: row.team_a_players },
-      { id: row.id + '-b', name: row.team_b_name, players: row.team_b_players },
+      {
+        id: row.id + '-a',
+        name: row.team_a_name,
+        players: row.team_a_players,
+        color: row.team_a_color ?? undefined,
+      },
+      {
+        id: row.id + '-b',
+        name: row.team_b_name,
+        players: row.team_b_players,
+        color: row.team_b_color ?? undefined,
+      },
     ],
   };
 }
@@ -53,8 +65,10 @@ function toRow(input: MatchInput) {
     score_team_b: input.score?.teamB ?? null,
     team_a_name: input.teams[0].name,
     team_a_players: input.teams[0].players,
+    team_a_color: input.teams[0].color ?? null,
     team_b_name: input.teams[1].name,
     team_b_players: input.teams[1].players,
+    team_b_color: input.teams[1].color ?? null,
   };
 }
 
@@ -72,6 +86,37 @@ export async function insertMatch(input: MatchInput): Promise<Match> {
   const { data, error } = await supabase
     .from('matches')
     .insert(toRow(input))
+    .select(MATCH_COLUMNS)
+    .single();
+
+  if (error) throw error;
+  return toMatch(data as MatchRow);
+}
+
+/** Champs modifiables d'un match déjà enregistré ; seuls les champs fournis sont mis à jour. */
+export interface MatchUpdate {
+  playedAt?: Date;
+  /** null efface le lieu. */
+  location?: string | null;
+  status?: MatchStatus;
+  /** null efface le score. */
+  score?: MatchScore | null;
+}
+
+export async function updateMatchRow(id: ID, update: MatchUpdate): Promise<Match> {
+  const patch: Record<string, unknown> = {};
+  if (update.playedAt !== undefined) patch.played_at = update.playedAt.toISOString();
+  if (update.location !== undefined) patch.location = update.location;
+  if (update.status !== undefined) patch.status = update.status;
+  if (update.score !== undefined) {
+    patch.score_team_a = update.score?.teamA ?? null;
+    patch.score_team_b = update.score?.teamB ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from('matches')
+    .update(patch)
+    .eq('id', id)
     .select(MATCH_COLUMNS)
     .single();
 

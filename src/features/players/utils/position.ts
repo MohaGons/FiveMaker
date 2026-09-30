@@ -1,7 +1,6 @@
 import type { PlayerPosition } from '../types';
 
 const POSITION_LABELS: Record<PlayerPosition, string> = {
-  goalkeeper: 'Gardien',
   defender: 'Défenseur',
   midfielder: 'Milieu',
   forward: 'Attaquant',

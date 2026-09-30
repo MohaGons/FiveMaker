@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react';
 import type { Player } from '../types';
 import { getPositionLabel } from '../utils/position';
+import { PlayerAvatar } from './PlayerAvatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,30 +12,11 @@ interface PlayerCardProps {
   onDelete?: (player: Player) => void;
 }
 
-function getInitials(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
-}
-
 export function PlayerCard({ player, onEdit, onDelete }: PlayerCardProps) {
   return (
     <Card className="p-4 transition hover:shadow-md">
       <div className="flex items-start gap-3">
-        {player.avatarUrl ? (
-          <img
-            src={player.avatarUrl}
-            alt=""
-            className="h-12 w-12 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-            {getInitials(player.name)}
-          </div>
-        )}
+        <PlayerAvatar name={player.name} avatarUrl={player.avatarUrl} />
 
         <div className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">

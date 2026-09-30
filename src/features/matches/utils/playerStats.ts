@@ -16,6 +16,9 @@ export function computePlayerStats(matches: Match[]): PlayerStats[] {
   const statsById = new Map<ID, PlayerStats>();
 
   for (const match of matches) {
+    // Les matchs à venir ou annulés ne comptent pas comme joués.
+    if (match.status !== 'completed') continue;
+
     const [teamA, teamB] = match.teams;
     const outcome = match.score
       ? match.score.teamA === match.score.teamB

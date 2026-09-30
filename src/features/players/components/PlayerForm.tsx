@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
-import type { PlayerInput } from '../hooks/usePlayers';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
+import { Camera } from 'lucide-react';
+import type { AvatarChange, PlayerDetails } from '../hooks/usePlayers';
 import type { Player, PlayerPosition } from '../types';
 import { POSITION_OPTIONS } from '../utils/position';
+import { PlayerAvatar } from './PlayerAvatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -17,7 +19,7 @@ import {
 
 interface PlayerFormProps {
   initialPlayer?: Player;
-  onSubmit: (input: PlayerInput) => void;
+  onSubmit: (details: PlayerDetails, avatar: AvatarChange) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
 }
@@ -31,6 +33,37 @@ export function PlayerForm({ initialPlayer, onSubmit, onCancel, isSubmitting = f
     initialPlayer?.preferredPosition ?? 'midfielder',
   );
   const [isGuest, setIsGuest] = useState(initialPlayer?.isGuest ?? false);
+  const [avatar, setAvatar] = useState<AvatarChange>({ type: 'keep' });
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Libère l'aperçu local de la photo choisie quand il est remplacé ou que le formulaire se ferme.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const displayedAvatarUrl =
+    avatar.type === 'replace'
+      ? (previewUrl ?? undefined)
+      : avatar.type === 'remove'
+        ? undefined
+        : initialPlayer?.avatarUrl;
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ''; // Permet de re-choisir le même fichier après l'avoir retiré.
+    if (!file) return;
+
+    setAvatar({ type: 'replace', file });
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+
+  function handleRemovePhoto() {
+    setAvatar({ type: 'remove' });
+    setPreviewUrl(null);
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,11 +71,40 @@ export function PlayerForm({ initialPlayer, onSubmit, onCancel, isSubmitting = f
     const trimmedName = name.trim();
     if (!trimmedName) return;
 
-    onSubmit({ name: trimmedName, skillLevel, preferredPosition, isGuest });
+    onSubmit({ name: trimmedName, skillLevel, preferredPosition, isGuest }, avatar);
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="flex items-center gap-4">
+        <PlayerAvatar name={name} avatarUrl={displayedAvatarUrl} className="h-16 w-16 text-base" />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-full"
+          >
+            <Camera />
+            {displayedAvatarUrl ? 'Changer la photo' : 'Ajouter une photo'}
+          </Button>
+          {displayedAvatarUrl && (
+            <Button type="button" variant="ghost" size="sm" onClick={handleRemovePhoto} className="rounded-full">
+              Retirer
+            </Button>
+          )}
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+          aria-label="Photo du joueur"
+        />
+      </div>
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="player-name">Nom</Label>
         <Input

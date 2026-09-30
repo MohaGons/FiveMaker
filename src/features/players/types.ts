@@ -1,6 +1,6 @@
 import type { ID } from '../../shared/types/common';
 
-export type PlayerPosition = 'goalkeeper' | 'defender' | 'midfielder' | 'forward';
+export type PlayerPosition = 'defender' | 'midfielder' | 'forward';
 
 export interface Player {
   id: ID;

@@ -94,14 +94,14 @@ export function PlayersPage() {
             initialPlayer={editingPlayer ?? undefined}
             onCancel={closeForm}
             isSubmitting={isSubmitting}
-            onSubmit={async (input) => {
+            onSubmit={async (details, avatar) => {
               setIsSubmitting(true);
               setFormError(null);
               try {
                 if (editingPlayer) {
-                  await updatePlayer(editingPlayer.id, input);
+                  await updatePlayer(editingPlayer.id, details, avatar);
                 } else {
-                  await addPlayer(input);
+                  await addPlayer(details, avatar);
                 }
                 closeForm();
               } catch (err) {

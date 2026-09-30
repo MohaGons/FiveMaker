@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { ID } from '../../../shared/types/common';
-import { deleteMatchRow, fetchMatches, insertMatch } from '../api/matchesApi';
-import type { MatchInput } from '../api/matchesApi';
+import { deleteMatchRow, fetchMatches, insertMatch, updateMatchRow } from '../api/matchesApi';
+import type { MatchInput, MatchUpdate } from '../api/matchesApi';
 import type { Match } from '../types';
 
-export type { MatchInput };
+export type { MatchInput, MatchUpdate };
 
 export function useMatches() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -35,10 +35,15 @@ export function useMatches() {
     setMatches((current) => [match, ...current]);
   }
 
+  async function updateMatch(id: ID, update: MatchUpdate): Promise<void> {
+    const updated = await updateMatchRow(id, update);
+    setMatches((current) => current.map((match) => (match.id === id ? updated : match)));
+  }
+
   async function removeMatch(id: ID): Promise<void> {
     await deleteMatchRow(id);
     setMatches((current) => current.filter((match) => match.id !== id));
   }
 
-  return { matches, isLoading, error, addMatch, removeMatch };
+  return { matches, isLoading, error, addMatch, updateMatch, removeMatch };
 }

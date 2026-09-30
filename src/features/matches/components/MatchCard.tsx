@@ -1,13 +1,25 @@
-import { CalendarDays, MapPin, Trash2 } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { CalendarDays, MapPin, Pencil, Trash2 } from 'lucide-react';
 import { getAverageSkill } from '../../teams/utils/balanceTeams';
-import type { Match } from '../types';
+import { DEFAULT_TEAM_COLORS, tint } from '../../teams/utils/teamColors';
+import type { Match, MatchStatus } from '../types';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 interface MatchCardProps {
   match: Match;
+  onEdit?: (match: Match) => void;
   onDelete?: (match: Match) => void;
+  /** Boutons affichés en bas de la carte (ex. saisie du score d'un match à venir). */
+  actions?: ReactNode;
 }
+
+const STATUS_BADGES: Record<Exclude<MatchStatus, 'completed'>, { label: string; variant: 'default' | 'destructive' }> = {
+  scheduled: { label: 'À venir', variant: 'default' },
+  cancelled: { label: 'Annulé', variant: 'destructive' },
+};
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
@@ -15,6 +27,8 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
   month: 'long',
   year: 'numeric',
 });
+
+const TIME_FORMATTER = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
 function PitchOverlay() {
   return (
@@ -33,16 +47,31 @@ function PitchOverlay() {
   );
 }
 
-export function MatchCard({ match, onDelete }: MatchCardProps) {
+function TeamColorDot({ color }: { color: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="h-3 w-3 shrink-0 rounded-full ring-1 ring-foreground/20"
+      style={{ backgroundColor: color }}
+    />
+  );
+}
+
+export function MatchCard({ match, onEdit, onDelete, actions }: MatchCardProps) {
   const [teamA, teamB] = match.teams;
+  const statusBadge = match.status === 'completed' ? null : STATUS_BADGES[match.status];
+  const colorA = teamA.color ?? DEFAULT_TEAM_COLORS[0];
+  const colorB = teamB.color ?? DEFAULT_TEAM_COLORS[1];
 
   return (
-    <Card className="p-5">
+    <Card className={cn('p-5', match.status === 'cancelled' && 'opacity-70')}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <p className="flex items-center gap-1.5 text-sm font-medium capitalize text-foreground">
+          <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground">
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
-            {DATE_FORMATTER.format(match.playedAt)}
+            <span className="capitalize">{DATE_FORMATTER.format(match.playedAt)}</span>
+            {match.status === 'scheduled' && <span>à {TIME_FORMATTER.format(match.playedAt)}</span>}
+            {statusBadge && <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>}
           </p>
           {match.location && (
             <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -52,30 +81,46 @@ export function MatchCard({ match, onDelete }: MatchCardProps) {
           )}
         </div>
 
-        {onDelete && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => onDelete(match)}
-            aria-label="Supprimer le match"
-            className="shrink-0 hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 />
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {onEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onEdit(match)}
+              aria-label="Modifier le match"
+            >
+              <Pencil />
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => onDelete(match)}
+              aria-label="Supprimer le match"
+              className="hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 />
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="relative mt-4 overflow-hidden rounded-xl">
         <div className="absolute inset-0 grid grid-cols-2" aria-hidden="true">
-          <div className="bg-primary/8" />
-          <div className="bg-orange-500/8" />
+          <div style={{ backgroundColor: tint(colorA, 12) }} />
+          <div style={{ backgroundColor: tint(colorB, 12) }} />
         </div>
         <PitchOverlay />
 
         <div className="relative grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-5">
           <div className="text-right">
-            <p className="font-semibold text-foreground">{teamA.name}</p>
+            <p className="flex items-center justify-end gap-1.5 font-semibold text-foreground">
+              {teamA.name}
+              <TeamColorDot color={colorA} />
+            </p>
             <p className="text-xs text-muted-foreground">Niveau moyen {getAverageSkill(teamA).toFixed(1)}</p>
           </div>
 
@@ -84,7 +129,10 @@ export function MatchCard({ match, onDelete }: MatchCardProps) {
           </div>
 
           <div>
-            <p className="font-semibold text-foreground">{teamB.name}</p>
+            <p className="flex items-center gap-1.5 font-semibold text-foreground">
+              <TeamColorDot color={colorB} />
+              {teamB.name}
+            </p>
             <p className="text-xs text-muted-foreground">Niveau moyen {getAverageSkill(teamB).toFixed(1)}</p>
           </div>
         </div>
@@ -102,6 +150,8 @@ export function MatchCard({ match, onDelete }: MatchCardProps) {
           ))}
         </ul>
       </div>
+
+      {actions && <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4">{actions}</div>}
     </Card>
   );
 }

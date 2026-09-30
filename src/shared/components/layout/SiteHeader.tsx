@@ -9,7 +9,7 @@ const NAV_LINKS = [
   { to: '/', label: 'Accueil' },
   { to: '/joueurs', label: 'Joueurs' },
   { to: '/equipes', label: 'Équipes' },
-  { to: '/historique', label: 'Historique' },
+  { to: '/historique', label: 'Matchs' },
   { to: '/statistiques', label: 'Stats' },
 ];
 
