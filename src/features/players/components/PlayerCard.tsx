@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import type { Player } from '../types';
 import { getPositionLabel } from '../utils/position';
@@ -12,9 +13,13 @@ interface PlayerCardProps {
   onDelete?: (player: Player) => void;
   /** Niveau ajusté selon les résultats, affiché à la place du niveau de la fiche. */
   level?: number;
+  /** Fiche du compte connecté. */
+  isMe?: boolean;
+  /** Action affichée à gauche du pied de carte (ex. « C'est moi »). */
+  footerAction?: ReactNode;
 }
 
-export function PlayerCard({ player, onEdit, onDelete, level }: PlayerCardProps) {
+export function PlayerCard({ player, onEdit, onDelete, level, isMe = false, footerAction }: PlayerCardProps) {
   const displayedLevel = level ?? player.skillLevel;
 
   return (
@@ -25,6 +30,7 @@ export function PlayerCard({ player, onEdit, onDelete, level }: PlayerCardProps)
         <div className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">
             <p className="truncate font-medium text-foreground">{player.name}</p>
+            {isMe && <Badge>Toi</Badge>}
             {player.isGuest && <Badge variant="secondary">Invité</Badge>}
           </div>
           <p className="text-sm text-muted-foreground">{getPositionLabel(player.preferredPosition)}</p>
@@ -40,8 +46,9 @@ export function PlayerCard({ player, onEdit, onDelete, level }: PlayerCardProps)
         </div>
       </div>
 
-      {(onEdit || onDelete) && (
-        <div className="mt-3 flex items-center justify-end gap-1 border-t pt-3">
+      {(onEdit || onDelete || footerAction) && (
+        <div className="mt-3 flex items-center gap-1 border-t pt-3">
+          <div className="mr-auto">{footerAction}</div>
           {onEdit && (
             <Button
               type="button"

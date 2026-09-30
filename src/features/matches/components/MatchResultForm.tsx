@@ -20,7 +20,6 @@ export function MatchResultForm({ match, onSubmit, onCancel, isSubmitting = fals
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
   const [playerStats, setPlayerStats] = useState<Record<ID, MatchPlayerStats>>(match.playerStats);
-  const [mvpPlayerId, setMvpPlayerId] = useState<ID | null>(match.mvpPlayerId ?? null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,7 +27,6 @@ export function MatchResultForm({ match, onSubmit, onCancel, isSubmitting = fals
       status: 'completed',
       score: { teamA: Number(scoreA), teamB: Number(scoreB) },
       playerStats,
-      mvpPlayerId,
     });
   }
 
@@ -49,8 +47,6 @@ export function MatchResultForm({ match, onSubmit, onCancel, isSubmitting = fals
           teams={match.teams}
           value={playerStats}
           onChange={setPlayerStats}
-          mvpPlayerId={mvpPlayerId}
-          onMvpChange={setMvpPlayerId}
           goalsScored={[parseScoreInput(scoreA), parseScoreInput(scoreB)]}
         />
       </div>

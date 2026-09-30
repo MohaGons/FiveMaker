@@ -3,7 +3,7 @@ import type { PlayerInput } from '../hooks/usePlayers';
 import type { ID } from '../../../shared/types/common';
 import type { Player } from '../types';
 
-const PLAYER_COLUMNS = 'id, name, skill_level, preferred_position, is_guest, avatar_url';
+const PLAYER_COLUMNS = 'id, name, skill_level, preferred_position, is_guest, avatar_url, account_user_id';
 
 interface PlayerRow {
   id: string;
@@ -12,6 +12,7 @@ interface PlayerRow {
   preferred_position: Player['preferredPosition'];
   is_guest: boolean;
   avatar_url: string | null;
+  account_user_id: string | null;
 }
 
 function toPlayer(row: PlayerRow): Player {
@@ -22,6 +23,7 @@ function toPlayer(row: PlayerRow): Player {
     preferredPosition: row.preferred_position,
     isGuest: row.is_guest,
     avatarUrl: row.avatar_url ?? undefined,
+    accountUserId: row.account_user_id ?? undefined,
   };
 }
 
@@ -67,6 +69,24 @@ export async function updatePlayerRow(id: ID, input: PlayerInput): Promise<Playe
 
   if (error) throw error;
   return toPlayer(data as PlayerRow);
+}
+
+/** "C'est moi" : relie le compte connecté à cette fiche (et libère son ancienne fiche du groupe). */
+export async function claimPlayer(playerId: ID): Promise<void> {
+  const { error } = await supabase.rpc('claim_player', { pid: playerId });
+  if (error) throw error;
+}
+
+/** "Ce n'est pas moi" : le compte connecté n'a plus de fiche dans ce groupe. */
+export async function releasePlayer(groupId: ID): Promise<void> {
+  const { error } = await supabase.rpc('release_player', { gid: groupId });
+  if (error) throw error;
+}
+
+/** Réservé au créateur : relie une fiche à un membre, ou la libère (userId null). */
+export async function linkPlayer(playerId: ID, userId: ID | null): Promise<void> {
+  const { error } = await supabase.rpc('link_player', { pid: playerId, uid: userId });
+  if (error) throw error;
 }
 
 export async function deletePlayerRow(id: ID): Promise<void> {

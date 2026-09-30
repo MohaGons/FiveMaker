@@ -4,7 +4,7 @@ import type { Player } from '../../players/types';
 import type { Match, MatchPlayerStats, MatchScore, MatchStatus } from '../types';
 
 const MATCH_COLUMNS =
-  'id, played_at, location, status, score_team_a, score_team_b, team_a_name, team_a_players, team_a_color, team_b_name, team_b_players, team_b_color, player_stats, mvp_player_id';
+  'id, played_at, location, status, score_team_a, score_team_b, team_a_name, team_a_players, team_a_color, team_b_name, team_b_players, team_b_color, player_stats, mvp_player_id, ratings_close_at';
 
 interface MatchRow {
   id: string;
@@ -21,6 +21,7 @@ interface MatchRow {
   team_b_color: string | null;
   player_stats: Record<ID, MatchPlayerStats> | null;
   mvp_player_id: string | null;
+  ratings_close_at: string | null;
 }
 
 export interface MatchInput {
@@ -57,6 +58,11 @@ function toMatch(row: MatchRow): Match {
     ],
     playerStats: row.player_stats ?? {},
     mvpPlayerId: row.mvp_player_id ?? undefined,
+    ratingsCloseAt: row.ratings_close_at ? new Date(row.ratings_close_at) : undefined,
+    // Complétés par useMatches à partir des votes.
+    ratings: {},
+    openVoters: 0,
+    myRatingsCount: 0,
   };
 }
 
@@ -107,8 +113,6 @@ export interface MatchUpdate {
   /** null efface le score. */
   score?: MatchScore | null;
   playerStats?: Record<ID, MatchPlayerStats>;
-  /** null efface l'homme du match. */
-  mvpPlayerId?: ID | null;
 }
 
 export async function updateMatchRow(id: ID, update: MatchUpdate): Promise<Match> {
@@ -121,7 +125,6 @@ export async function updateMatchRow(id: ID, update: MatchUpdate): Promise<Match
     patch.score_team_b = update.score?.teamB ?? null;
   }
   if (update.playerStats !== undefined) patch.player_stats = update.playerStats;
-  if (update.mvpPlayerId !== undefined) patch.mvp_player_id = update.mvpPlayerId;
 
   const { data, error } = await supabase
     .from('matches')

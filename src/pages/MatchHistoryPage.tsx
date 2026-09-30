@@ -1,11 +1,16 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Check, Star } from 'lucide-react';
 import { EditMatchForm } from '../features/matches/components/EditMatchForm';
 import { MatchCard } from '../features/matches/components/MatchCard';
+import { MatchRatingForm } from '../features/matches/components/MatchRatingForm';
 import { MatchResultForm } from '../features/matches/components/MatchResultForm';
 import { useCurrentGroup } from '../features/groups/hooks/useGroups';
 import { useMatches } from '../features/matches/hooks/useMatches';
 import type { MatchUpdate } from '../features/matches/hooks/useMatches';
 import type { Match } from '../features/matches/types';
+import { areRatingsOpen, getMatchPlayerIds } from '../features/matches/utils/matchRatings';
+import { usePlayers } from '../features/players/hooks/usePlayers';
 import { ShareTeamsButtons } from '../features/teams/components/ShareTeamsButtons';
 import { formatTeamsMessage } from '../features/teams/utils/shareMessage';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
@@ -13,13 +18,15 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export function MatchHistoryPage() {
-  const { matches, isLoading, error, updateMatch, removeMatch } = useMatches();
+  const { matches, isLoading, error, updateMatch, removeMatch, rateMatch } = useMatches();
+  const { myPlayer, isLoading: isLoadingPlayers } = usePlayers();
   const { canEdit } = useCurrentGroup();
   // Lecture seule pour les membres : pas de modification, d'annulation ni de suppression.
   const editHandlers = canEdit ? { onEdit: openEditForm, onDelete: handleDelete } : {};
   const [actionError, setActionError] = useState<string | null>(null);
   const [scoringMatch, setScoringMatch] = useState<Match | null>(null);
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
+  const [ratingMatch, setRatingMatch] = useState<Match | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Le prochain match en premier ; les matchs passés restent du plus récent au plus ancien.
@@ -27,6 +34,13 @@ export function MatchHistoryPage() {
     .filter((match) => match.status === 'scheduled')
     .sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime());
   const pastMatches = matches.filter((match) => match.status !== 'scheduled');
+
+  /** Le compte connecté peut noter ce match : votes ouverts et sa fiche fait partie des joueurs. */
+  function canRate(match: Match): boolean {
+    return areRatingsOpen(match) && myPlayer !== null && getMatchPlayerIds(match).includes(myPlayer.id);
+  }
+  // Des votes sont ouverts mais le compte n'a pas encore dit quelle fiche est la sienne.
+  const needsPlayerLink = !isLoadingPlayers && myPlayer === null && matches.some((match) => areRatingsOpen(match));
 
   async function handleDelete(match: Match) {
     if (!window.confirm('Supprimer ce match de l\'historique ?')) return;
@@ -81,6 +95,17 @@ export function MatchHistoryPage() {
 
         {actionError && !scoringMatch && !editingMatch && (
           <p className="mt-4 text-sm text-red-600 dark:text-red-400">{actionError}</p>
+        )}
+
+        {needsPlayerLink && (
+          <p className="mt-4 rounded-lg bg-primary/10 px-4 py-3 text-sm text-foreground">
+            Des votes sont ouverts. Pour noter les joueurs des matchs auxquels tu as participé, indique
+            d'abord quelle fiche est la tienne sur la page{' '}
+            <Link to="/joueurs" className="font-medium text-primary underline-offset-4 hover:underline">
+              Joueurs
+            </Link>{' '}
+            (« C'est moi »).
+          </p>
         )}
 
         <div className="mt-8">
@@ -153,7 +178,22 @@ export function MatchHistoryPage() {
                         {...editHandlers}
                         actions={
                           match.status === 'completed' && (
-                            <ShareTeamsButtons size="sm" getMessage={() => formatTeamsMessage(match.teams, match)} />
+                            <>
+                              <ShareTeamsButtons size="sm" getMessage={() => formatTeamsMessage(match.teams, match)} />
+                              {canRate(match) && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  // Déjà voté : bouton secondaire, pour montrer que c'est fait.
+                                  variant={match.myRatingsCount > 0 ? 'outline' : 'default'}
+                                  onClick={() => setRatingMatch(match)}
+                                  className="rounded-full"
+                                >
+                                  {match.myRatingsCount > 0 ? <Check /> : <Star />}
+                                  {match.myRatingsCount > 0 ? 'Modifier mes notes' : 'Noter les joueurs'}
+                                </Button>
+                              )}
+                            </>
                           )
                         }
                       />
@@ -180,6 +220,26 @@ export function MatchHistoryPage() {
             />
           )}
           {actionError && <p className="text-sm text-red-600 dark:text-red-400">{actionError}</p>}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={ratingMatch !== null} onOpenChange={(open) => !open && setRatingMatch(null)}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Noter les joueurs</DialogTitle>
+          </DialogHeader>
+          {ratingMatch && myPlayer && (
+            <MatchRatingForm
+              key={ratingMatch.id}
+              match={ratingMatch}
+              myPlayerId={myPlayer.id}
+              onCancel={() => setRatingMatch(null)}
+              onSubmit={async (ratings) => {
+                await rateMatch(ratingMatch.id, ratings);
+                setRatingMatch(null);
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

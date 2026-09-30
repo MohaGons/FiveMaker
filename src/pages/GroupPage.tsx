@@ -16,12 +16,15 @@ import {
 import { CreateGroupForm } from '../features/groups/components/CreateGroupForm';
 import { useCurrentGroup, useGroups } from '../features/groups/hooks/useGroups';
 import type { GroupMember, GroupRole } from '../features/groups/types';
+import { usePlayers } from '../features/players/hooks/usePlayers';
+import type { Player } from '../features/players/types';
 import { getWhatsAppShareUrl } from '../features/teams/utils/shareMessage';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const ROLE_LABELS: Record<GroupRole, string> = { owner: 'Créateur', admin: 'Admin', member: 'Membre' };
 
@@ -37,6 +40,44 @@ function RoleBadge({ role }: { role: GroupRole }) {
   );
 }
 
+/** Valeur du menu pour « aucune fiche » (les valeurs sont des identifiants de fiche). */
+const NO_PLAYER = '';
+
+interface PlayerLinkSelectProps {
+  member: GroupMember;
+  players: Player[];
+  onChange: (playerId: string | null) => void;
+}
+
+/** Créateur : choisir la fiche joueur d'un membre, parmi les fiches libres (ou la sienne actuelle). */
+function PlayerLinkSelect({ member, players, onChange }: PlayerLinkSelectProps) {
+  const current = players.find((player) => player.accountUserId === member.userId);
+  const options = players.filter((player) => !player.accountUserId || player.accountUserId === member.userId);
+  const items = [
+    { value: NO_PLAYER, label: 'Aucune fiche' },
+    ...options.map((player) => ({ value: player.id, label: player.name })),
+  ];
+
+  return (
+    <Select
+      value={current?.id ?? NO_PLAYER}
+      onValueChange={(value) => onChange(value ? (value as string) : null)}
+      items={items}
+    >
+      <SelectTrigger size="sm" aria-label={`Fiche joueur de ${member.displayName}`} className="w-40">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
@@ -45,6 +86,7 @@ export function GroupPage() {
   const { session } = useAuth();
   const { groups, selectGroup, refreshGroups } = useGroups();
   const { group, canEdit, isOwner } = useCurrentGroup();
+  const { players, linkPlayerToMember, forgetMemberLink } = usePlayers();
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(true);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -136,11 +178,23 @@ export function GroupPage() {
     }, 'Changement de rôle impossible.');
   }
 
+  async function handleLinkPlayer(member: GroupMember, playerId: string | null) {
+    await run(async () => {
+      if (playerId) {
+        await linkPlayerToMember(playerId, member.userId);
+      } else {
+        const current = players.find((player) => player.accountUserId === member.userId);
+        if (current) await linkPlayerToMember(current.id, null);
+      }
+    }, 'Association impossible.');
+  }
+
   async function handleRemove(member: GroupMember) {
     if (!window.confirm(`Exclure ${member.displayName} du groupe ?`)) return;
     await run(async () => {
       await removeMember(group.id, member.userId);
       setMembers((current) => current.filter((m) => m.userId !== member.userId));
+      forgetMemberLink(member.userId);
       // Sans nouveau lien, la personne exclue pourrait revenir avec l'ancien.
       setInviteToken(await regenerateInviteToken(group.id));
     }, 'Exclusion impossible.');
@@ -269,8 +323,17 @@ export function GroupPage() {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Membre depuis le {JOINED_FORMATTER.format(member.joinedAt)}
+                        {!isOwner &&
+                          ` · Fiche : ${players.find((player) => player.accountUserId === member.userId)?.name ?? 'aucune'}`}
                       </p>
                     </div>
+                    {isOwner && (
+                      <PlayerLinkSelect
+                        member={member}
+                        players={players}
+                        onChange={(playerId) => handleLinkPlayer(member, playerId)}
+                      />
+                    )}
                     <RoleBadge role={member.role} />
                     {canManage && (
                       <div className="flex gap-1">

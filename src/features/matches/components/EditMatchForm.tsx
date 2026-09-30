@@ -26,7 +26,6 @@ export function EditMatchForm({ match, onSubmit, onCancel, isSubmitting = false 
   const [scoreA, setScoreA] = useState(match.score ? String(match.score.teamA) : '');
   const [scoreB, setScoreB] = useState(match.score ? String(match.score.teamB) : '');
   const [playerStats, setPlayerStats] = useState<Record<ID, MatchPlayerStats>>(match.playerStats);
-  const [mvpPlayerId, setMvpPlayerId] = useState<ID | null>(match.mvpPlayerId ?? null);
 
   // Seuls les matchs à venir ont une heure ; seuls les matchs joués ont un score.
   const isScheduled = match.status === 'scheduled';
@@ -43,7 +42,6 @@ export function EditMatchForm({ match, onSubmit, onCancel, isSubmitting = false 
       ...(isCompleted && {
         score: hasScore ? { teamA: Number(scoreA), teamB: Number(scoreB) } : null,
         playerStats,
-        mvpPlayerId,
       }),
     });
   }
@@ -107,8 +105,6 @@ export function EditMatchForm({ match, onSubmit, onCancel, isSubmitting = false 
             teams={match.teams}
             value={playerStats}
             onChange={setPlayerStats}
-            mvpPlayerId={mvpPlayerId}
-            onMvpChange={setMvpPlayerId}
             goalsScored={[parseScoreInput(scoreA), parseScoreInput(scoreB)]}
           />
         </div>

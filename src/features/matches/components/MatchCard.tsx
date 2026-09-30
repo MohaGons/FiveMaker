@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { CalendarDays, MapPin, Pencil, Star, Trash2 } from 'lucide-react';
+import { CalendarDays, MapPin, Pencil, Star, Trash2, Vote } from 'lucide-react';
 import { getAverageSkill } from '../../teams/utils/balanceTeams';
 import { DEFAULT_TEAM_COLORS, tint } from '../../teams/utils/teamColors';
 import type { Player } from '../../players/types';
 import type { Match, MatchStatus } from '../types';
+import { areRatingsOpen } from '../utils/matchRatings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -30,6 +31,13 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
 });
 
 const TIME_FORMATTER = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const VOTE_CLOSE_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 function PitchOverlay() {
   return (
@@ -48,10 +56,11 @@ function PitchOverlay() {
   );
 }
 
-/** Nom du joueur, avec ses buts, passes et l'étoile d'homme du match s'il y en a. */
+/** Nom du joueur, avec ses buts, passes, sa note moyenne et l'étoile d'homme du match s'il y en a. */
 function PlayerLine({ player, match }: { player: Player; match: Match }) {
   const stats = match.playerStats[player.id];
   const isMvp = match.mvpPlayerId === player.id;
+  const rating = match.ratings[player.id];
   const details = [
     stats?.goals ? `${stats.goals} but${stats.goals > 1 ? 's' : ''}` : null,
     stats?.assists ? `${stats.assists} passe${stats.assists > 1 ? 's' : ''}` : null,
@@ -62,6 +71,15 @@ function PlayerLine({ player, match }: { player: Player; match: Match }) {
       {isMvp && <Star aria-label="Homme du match" className="mr-1 inline h-3.5 w-3.5 fill-yellow-400 text-yellow-500" />}
       {player.name}
       {details.length > 0 && <span className="text-xs text-muted-foreground"> · {details.join(', ')}</span>}
+      {rating && (
+        <span
+          className="text-xs text-muted-foreground tabular-nums"
+          title={`${rating.votes} vote${rating.votes > 1 ? 's' : ''}`}
+        >
+          {' '}
+          · ★ {rating.average.toFixed(1)}
+        </span>
+      )}
     </li>
   );
 }
@@ -169,6 +187,23 @@ export function MatchCard({ match, onEdit, onDelete, actions }: MatchCardProps) 
           ))}
         </ul>
       </div>
+
+      {areRatingsOpen(match) && (
+        <p className="mt-4 flex items-center gap-1.5 border-t pt-4 text-xs text-muted-foreground">
+          <Vote className="h-3.5 w-3.5" />
+          <span>
+            Votes ouverts jusqu'au {VOTE_CLOSE_FORMATTER.format(match.ratingsCloseAt!)} · {match.openVoters} votant
+            {match.openVoters > 1 ? 's' : ''}
+            {match.myRatingsCount > 0 && (
+              <span className="font-medium text-foreground">
+                {' '}
+                · Tu as noté {match.myRatingsCount} joueur{match.myRatingsCount > 1 ? 's' : ''}
+              </span>
+            )}
+            . Notes et homme du match dévoilés à la clôture.
+          </span>
+        </p>
+      )}
 
       {actions && <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4">{actions}</div>}
     </Card>

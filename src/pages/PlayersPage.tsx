@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { UserCheck } from 'lucide-react';
 import { PlayerCard } from '../features/players/components/PlayerCard';
 import { useCurrentGroup } from '../features/groups/hooks/useGroups';
 import { PlayerForm } from '../features/players/components/PlayerForm';
@@ -9,13 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export function PlayersPage() {
-  const { players, isLoading, error, addPlayer, updatePlayer, removePlayer } = usePlayers();
+  const { players, myPlayer, isLoading, error, addPlayer, updatePlayer, removePlayer, claimMyPlayer, releaseMyPlayer } =
+    usePlayers();
   const { canEdit } = useCurrentGroup();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   function openAddForm() {
     setEditingPlayer(null);
@@ -36,11 +38,30 @@ export function PlayersPage() {
   async function handleDelete(player: Player) {
     if (!window.confirm(`Supprimer ${player.name} de la liste ?`)) return;
 
-    setDeleteError(null);
+    setActionError(null);
     try {
       await removePlayer(player.id);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Suppression impossible.');
+      setActionError(err instanceof Error ? err.message : 'Suppression impossible.');
+    }
+  }
+
+  async function handleClaim(player: Player) {
+    setActionError(null);
+    try {
+      await claimMyPlayer(player.id);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Association impossible.');
+    }
+  }
+
+  async function handleRelease() {
+    if (!window.confirm("Ce n'est pas ta fiche ? Tu pourras en choisir une autre.")) return;
+    setActionError(null);
+    try {
+      await releaseMyPlayer();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Opération impossible.');
     }
   }
 
@@ -63,8 +84,19 @@ export function PlayersPage() {
           )}
         </div>
 
-        {deleteError && (
-          <p className="mb-4 text-sm text-red-600 dark:text-red-400">{deleteError}</p>
+        {actionError && (
+          <p className="mb-4 text-sm text-red-600 dark:text-red-400">{actionError}</p>
+        )}
+
+        {!isLoading && !error && players.length > 0 && !myPlayer && (
+          <div className="mb-6 flex items-start gap-3 rounded-lg bg-primary/10 px-4 py-3 text-sm text-foreground">
+            <UserCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <p>
+              <span className="font-medium">Quelle fiche est la tienne ?</span> Clique sur « C'est moi » sur ta
+              fiche pour pouvoir noter les joueurs après les matchs. Pas de fiche à ton nom ? Demande au créateur
+              du groupe ou à un admin de la créer.
+            </p>
+          </div>
         )}
 
         {isLoading ? (
@@ -85,6 +117,24 @@ export function PlayersPage() {
                 player={player}
                 onEdit={canEdit ? openEditForm : undefined}
                 onDelete={canEdit ? handleDelete : undefined}
+                isMe={player.id === myPlayer?.id}
+                footerAction={
+                  player.id === myPlayer?.id ? (
+                    <Button type="button" variant="ghost" size="sm" onClick={handleRelease}>
+                      Ce n'est pas moi
+                    </Button>
+                  ) : !myPlayer && !player.accountUserId ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleClaim(player)}
+                      className="rounded-full"
+                    >
+                      C'est moi
+                    </Button>
+                  ) : undefined
+                }
               />
             ))}
           </div>

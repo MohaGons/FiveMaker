@@ -11,4 +11,6 @@ export interface Player {
   /** Joueur ponctuel non inscrit au groupe habituel. */
   isGuest: boolean;
   avatarUrl?: string;
+  /** Compte du groupe à qui appartient cette fiche ("c'est moi"), s'il y en a un. */
+  accountUserId?: ID;
 }

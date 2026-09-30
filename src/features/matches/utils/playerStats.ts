@@ -19,6 +19,9 @@ export interface PlayerStats {
   form: MatchResult[];
   /** Plus longue série de victoires consécutives (matchs avec score). */
   bestWinStreak: number;
+  /** Moyenne de toutes les notes reçues (1 à 5), null sans note. */
+  averageRating: number | null;
+  ratingVotes: number;
 }
 
 const FORM_LENGTH = 5;
@@ -33,6 +36,7 @@ export function getMatchResult(match: Match, isTeamA: boolean): MatchResult | nu
 
 interface RunningStats extends PlayerStats {
   currentWinStreak: number;
+  ratingTotal: number;
 }
 
 export function computePlayerStats(matches: Match[]): PlayerStats[] {
@@ -64,7 +68,10 @@ export function computePlayerStats(matches: Match[]): PlayerStats[] {
           mvpCount: 0,
           form: [],
           bestWinStreak: 0,
+          averageRating: null,
+          ratingVotes: 0,
           currentWinStreak: 0,
+          ratingTotal: 0,
         };
 
         stats.name = player.name;
@@ -72,6 +79,13 @@ export function computePlayerStats(matches: Match[]): PlayerStats[] {
         stats.goals += match.playerStats[player.id]?.goals ?? 0;
         stats.assists += match.playerStats[player.id]?.assists ?? 0;
         if (match.mvpPlayerId === player.id) stats.mvpCount += 1;
+
+        // Moyenne pondérée par le nombre de votes de chaque match.
+        const rating = match.ratings[player.id];
+        if (rating) {
+          stats.ratingTotal += rating.average * rating.votes;
+          stats.ratingVotes += rating.votes;
+        }
 
         if (result) {
           if (result === 'win') stats.wins += 1;
@@ -89,9 +103,13 @@ export function computePlayerStats(matches: Match[]): PlayerStats[] {
   }
 
   return Array.from(statsById.values())
-    .map(({ currentWinStreak: _currentWinStreak, ...stats }) => {
+    .map(({ currentWinStreak: _currentWinStreak, ratingTotal, ...stats }) => {
       const decidedMatches = stats.wins + stats.draws + stats.losses;
-      return { ...stats, winRate: decidedMatches > 0 ? stats.wins / decidedMatches : 0 };
+      return {
+        ...stats,
+        winRate: decidedMatches > 0 ? stats.wins / decidedMatches : 0,
+        averageRating: stats.ratingVotes > 0 ? ratingTotal / stats.ratingVotes : null,
+      };
     })
     .sort((a, b) => b.winRate - a.winRate || b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name));
 }

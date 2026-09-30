@@ -132,6 +132,9 @@ export function PlayerStatsPage() {
                     <TableHead className="text-center" title="Plus longue série de victoires">
                       Série
                     </TableHead>
+                    <TableHead className="text-center" title="Moyenne des notes reçues des autres joueurs">
+                      Note
+                    </TableHead>
                     <TableHead className="text-right">% victoires</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -148,6 +151,19 @@ export function PlayerStatsPage() {
                         <FormBadges form={player.form} />
                       </TableCell>
                       <TableCell className="text-center">{player.bestWinStreak}</TableCell>
+                      <TableCell
+                        className="text-center"
+                        title={player.ratingVotes > 0 ? `${player.ratingVotes} vote${player.ratingVotes > 1 ? 's' : ''}` : undefined}
+                      >
+                        {player.averageRating !== null ? (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-500" />
+                            {player.averageRating.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">–</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         {player.wins + player.draws + player.losses > 0 ? (
                           <Badge variant={player.winRate >= 0.5 ? 'default' : 'secondary'}>

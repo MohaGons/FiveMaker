@@ -404,6 +404,267 @@ grant execute on function public.get_invite_info(text) to anon, authenticated;
 grant execute on function public.regenerate_invite(uuid) to authenticated;
 
 -- =====================================================================================================
+-- Fiche joueur de chaque compte : "c'est moi". Sert à savoir qui vote (et à ne pas se noter soi-même).
+-- Une fiche par compte et par groupe, modifiable seulement via les fonctions ci-dessous : un admin qui
+-- édite les fiches ne peut pas s'attribuer celle d'un autre.
+-- =====================================================================================================
+
+alter table public.players add column if not exists account_user_id uuid references auth.users (id) on delete set null;
+create unique index if not exists players_account_per_group
+  on public.players (group_id, account_user_id) where account_user_id is not null;
+
+create or replace function public.guard_player_link()
+returns trigger
+language plpgsql
+as $$
+begin
+  if (tg_op = 'INSERT' and new.account_user_id is not null)
+     or (tg_op = 'UPDATE' and new.account_user_id is distinct from old.account_user_id) then
+    if coalesce(current_setting('app.allow_player_link', true), '') <> 'on' then
+      raise exception 'Utilise « C''est moi » pour associer une fiche à un compte.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_player_link on public.players;
+create trigger guard_player_link
+  before insert or update on public.players
+  for each row execute function public.guard_player_link();
+
+-- "C'est moi" : relie le compte connecté à une fiche libre de son groupe (et libère l'ancienne).
+create or replace function public.claim_player(pid uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target public.players%rowtype;
+begin
+  select * into target from public.players where id = pid;
+  if not found or not public.is_group_member(target.group_id) then
+    raise exception 'Fiche introuvable.';
+  end if;
+  if target.account_user_id is not null and target.account_user_id <> auth.uid() then
+    raise exception 'Cette fiche est déjà associée à un autre membre.';
+  end if;
+
+  perform set_config('app.allow_player_link', 'on', true);
+  update public.players set account_user_id = null
+  where group_id = target.group_id and account_user_id = auth.uid() and id <> pid;
+  update public.players set account_user_id = auth.uid() where id = pid;
+end;
+$$;
+
+-- "Ce n'est pas moi" : le compte connecté n'a plus de fiche dans ce groupe.
+create or replace function public.release_player(gid uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform set_config('app.allow_player_link', 'on', true);
+  update public.players set account_user_id = null where group_id = gid and account_user_id = auth.uid();
+end;
+$$;
+
+-- Le créateur corrige les associations : relie une fiche à un membre (ou la libère avec uid = null).
+create or replace function public.link_player(pid uuid, uid uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  gid uuid;
+begin
+  select group_id into gid from public.players where id = pid;
+  if gid is null or not public.is_group_owner(gid) then
+    raise exception 'Seul le créateur du groupe peut associer les fiches des autres.';
+  end if;
+  if uid is not null and not exists (select 1 from public.group_members where group_id = gid and user_id = uid) then
+    raise exception 'Ce compte ne fait pas partie du groupe.';
+  end if;
+
+  perform set_config('app.allow_player_link', 'on', true);
+  if uid is not null then
+    update public.players set account_user_id = null where group_id = gid and account_user_id = uid and id <> pid;
+  end if;
+  update public.players set account_user_id = uid where id = pid;
+end;
+$$;
+
+-- Un membre qui quitte le groupe (ou en est exclu) libère sa fiche.
+create or replace function public.release_player_on_leave()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform set_config('app.allow_player_link', 'on', true);
+  update public.players set account_user_id = null where group_id = old.group_id and account_user_id = old.user_id;
+  return old;
+end;
+$$;
+
+drop trigger if exists release_player_on_leave on public.group_members;
+create trigger release_player_on_leave
+  after delete on public.group_members
+  for each row execute function public.release_player_on_leave();
+
+-- =====================================================================================================
+-- Notes des joueurs après un match : chaque joueur présent (relié à un compte) note les autres de 1 à 5,
+-- pendant 3 jours après la saisie du résultat. Les notes individuelles restent privées : on ne lit que
+-- ses propres notes, et les moyennes n'apparaissent qu'à la clôture des votes.
+-- =====================================================================================================
+
+alter table public.matches add column if not exists ratings_close_at timestamptz;
+
+-- Ouvre les votes quand un match passe en "joué" ; la date n'est jamais modifiable par l'appli.
+create or replace function public.set_ratings_window()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.status = 'completed' and (tg_op = 'INSERT' or old.status is distinct from 'completed') then
+    new.ratings_close_at := now() + interval '3 days';
+  elsif tg_op = 'UPDATE' then
+    new.ratings_close_at := old.ratings_close_at;
+  else
+    new.ratings_close_at := null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists set_ratings_window on public.matches;
+create trigger set_ratings_window
+  before insert or update on public.matches
+  for each row execute function public.set_ratings_window();
+
+create table if not exists public.match_ratings (
+  match_id uuid not null references public.matches (id) on delete cascade,
+  rater_user_id uuid not null references auth.users (id) on delete cascade,
+  rater_player_id uuid not null,
+  ratee_player_id uuid not null,
+  score smallint not null check (score between 1 and 5),
+  updated_at timestamptz not null default now(),
+  primary key (match_id, rater_user_id, ratee_player_id)
+);
+
+alter table public.match_ratings enable row level security;
+
+-- Lecture de ses propres notes uniquement ; l'écriture passe par rate_players.
+drop policy if exists "Raters read their own ratings" on public.match_ratings;
+create policy "Raters read their own ratings"
+  on public.match_ratings for select
+  using (rater_user_id = auth.uid());
+
+-- ratings : [{ "player_id": "...", "score": 1..5 }] ; un score null retire la note.
+create or replace function public.rate_players(mid uuid, ratings jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target public.matches%rowtype;
+  my_player uuid;
+  participants text[];
+  rating record;
+begin
+  select * into target from public.matches where id = mid;
+  if not found or not public.is_group_member(target.group_id) then
+    raise exception 'Match introuvable.';
+  end if;
+  if target.status <> 'completed' or target.ratings_close_at is null or target.ratings_close_at < now() then
+    raise exception 'Les votes sont fermés pour ce match.';
+  end if;
+
+  select id into my_player from public.players
+  where group_id = target.group_id and account_user_id = auth.uid();
+  if my_player is null then
+    raise exception 'Indique quelle fiche joueur est la tienne pour pouvoir voter.';
+  end if;
+
+  participants := array(
+    select player ->> 'id' from jsonb_array_elements(target.team_a_players || target.team_b_players) as player
+  );
+  if not (my_player::text = any (participants)) then
+    raise exception 'Seuls les joueurs de ce match peuvent voter.';
+  end if;
+
+  for rating in select * from jsonb_to_recordset(ratings) as r (player_id uuid, score int) loop
+    if rating.player_id = my_player then
+      raise exception 'Tu ne peux pas te noter toi-même.';
+    end if;
+    if not (rating.player_id::text = any (participants)) then
+      raise exception 'Ce joueur n''a pas joué ce match.';
+    end if;
+
+    if rating.score is null then
+      delete from public.match_ratings
+      where match_id = mid and rater_user_id = auth.uid() and ratee_player_id = rating.player_id;
+    elsif rating.score between 1 and 5 then
+      insert into public.match_ratings (match_id, rater_user_id, rater_player_id, ratee_player_id, score)
+      values (mid, auth.uid(), my_player, rating.player_id, rating.score)
+      on conflict (match_id, rater_user_id, ratee_player_id)
+      do update set score = excluded.score, rater_player_id = excluded.rater_player_id, updated_at = now();
+    else
+      raise exception 'Les notes vont de 1 à 5.';
+    end if;
+  end loop;
+end;
+$$;
+
+-- Moyennes par joueur et par match, uniquement pour les votes clos.
+create or replace function public.get_rating_averages(gid uuid)
+returns table (match_id uuid, player_id uuid, average numeric, votes bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select r.match_id, r.ratee_player_id, avg(r.score), count(*)
+  from public.match_ratings r
+  join public.matches m on m.id = r.match_id
+  where m.group_id = gid and public.is_group_member(gid) and m.ratings_close_at <= now()
+  group by r.match_id, r.ratee_player_id
+$$;
+
+-- Nombre de votants des matchs dont les votes sont encore ouverts (sans rien dévoiler des notes).
+create or replace function public.get_open_vote_counts(gid uuid)
+returns table (match_id uuid, voters bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select r.match_id, count(distinct r.rater_user_id)
+  from public.match_ratings r
+  join public.matches m on m.id = r.match_id
+  where m.group_id = gid and public.is_group_member(gid) and m.ratings_close_at > now()
+  group by r.match_id
+$$;
+
+revoke execute on function public.claim_player(uuid) from public, anon;
+revoke execute on function public.release_player(uuid) from public, anon;
+revoke execute on function public.link_player(uuid, uuid) from public, anon;
+revoke execute on function public.rate_players(uuid, jsonb) from public, anon;
+revoke execute on function public.get_rating_averages(uuid) from public, anon;
+revoke execute on function public.get_open_vote_counts(uuid) from public, anon;
+grant execute on function public.claim_player(uuid) to authenticated;
+grant execute on function public.release_player(uuid) to authenticated;
+grant execute on function public.link_player(uuid, uuid) to authenticated;
+grant execute on function public.rate_players(uuid, jsonb) to authenticated;
+grant execute on function public.get_rating_averages(uuid) to authenticated;
+grant execute on function public.get_open_vote_counts(uuid) to authenticated;
+
+-- =====================================================================================================
 -- Photos des joueurs : bucket public en lecture. On écrit dans "<id du groupe>/..." si on peut modifier
 -- le groupe (ou dans "<id du compte>/...", l'emplacement des photos d'avant les groupes).
 -- =====================================================================================================
