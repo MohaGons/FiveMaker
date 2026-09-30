@@ -1,19 +1,65 @@
 import type { ID } from '../../../shared/types/common';
-import type { Player } from '../../players/types';
+import type { Player, PlayerPosition } from '../../players/types';
 import type { PairingConstraint, Team } from '../types';
 import { DEFAULT_TEAM_NAMES } from './teamColors';
 
 /**
- * Écart de niveau moyen toléré par rapport à la meilleure répartition lors d'un remélange
+ * Écart toléré par rapport à la meilleure répartition lors d'un remélange, en niveau moyen
  * (0.2 = un point de niveau d'écart sur une équipe de 5).
  */
 const SHUFFLE_TOLERANCE = 0.2;
+/**
+ * Coût d'un joueur "mal réparti" entre les postes, exprimé en écart de niveau moyen.
+ * Inférieur à SHUFFLE_TOLERANCE : le niveau reste prioritaire, les postes départagent les répartitions proches.
+ */
+const POSITION_WEIGHT = 0.15;
 const EPSILON = 1e-9;
 
-export function getAverageSkill(team: Team): number {
+/** Niveau utilisé pour l'équilibrage : par défaut celui de la fiche, sinon le niveau ajusté selon les résultats. */
+export type GetLevel = (player: Player) => number;
+
+const manualLevel: GetLevel = (player) => player.skillLevel;
+
+const POSITIONS: PlayerPosition[] = ['defender', 'midfielder', 'forward'];
+
+export function getAverageSkill(team: Team, getLevel: GetLevel = manualLevel): number {
   if (team.players.length === 0) return 0;
-  const total = team.players.reduce((sum, player) => sum + player.skillLevel, 0);
+  const total = team.players.reduce((sum, player) => sum + getLevel(player), 0);
   return total / team.players.length;
+}
+
+export function countPositions(players: Player[]): Record<PlayerPosition, number> {
+  const counts: Record<PlayerPosition, number> = { defender: 0, midfielder: 0, forward: 0 };
+  for (const player of players) counts[player.preferredPosition] += 1;
+  return counts;
+}
+
+/**
+ * Nombre de joueurs à déplacer pour que chaque poste soit réparti au mieux entre les deux équipes
+ * (ex. 3 défenseurs contre 1 → 1 ; 2 contre 1 → 0, car un nombre impair ne peut pas être partagé).
+ */
+function positionImbalance(teamA: Player[], teamB: Player[]): number {
+  const countsA = countPositions(teamA);
+  const countsB = countPositions(teamB);
+  return POSITIONS.reduce(
+    (sum, position) => sum + Math.floor(Math.abs(countsA[position] - countsB[position]) / 2),
+    0,
+  );
+}
+
+/** Conditions "ensemble" / "séparés" non respectées par des équipes (utile après un déplacement manuel). */
+export function findViolatedConstraints(
+  teams: [Team, Team],
+  constraints: PairingConstraint[],
+): PairingConstraint[] {
+  const teamIndexById = new Map<ID, number>();
+  teams.forEach((team, index) => team.players.forEach((player) => teamIndexById.set(player.id, index)));
+
+  return constraints.filter((constraint) => {
+    const [a, b] = constraint.playerIds.map((id) => teamIndexById.get(id));
+    if (a === undefined || b === undefined) return false;
+    return constraint.rule === 'together' ? a !== b : a === b;
+  });
 }
 
 export interface BalanceOptions {
@@ -21,6 +67,7 @@ export interface BalanceOptions {
   shuffle?: boolean;
   /** Répartition à éviter (typiquement celle affichée), pour qu'un remélange change vraiment les équipes. */
   exclude?: [Team, Team];
+  getLevel?: GetLevel;
 }
 
 export type BalanceResult = { ok: true; teams: [Team, Team] } | { ok: false; reason: string };
@@ -28,11 +75,8 @@ export type BalanceResult = { ok: true; teams: [Team, Team] } | { ok: false; rea
 interface Candidate {
   teamA: Player[];
   teamB: Player[];
-  gap: number;
-}
-
-function sumSkill(players: Player[]): number {
-  return players.reduce((sum, player) => sum + player.skillLevel, 0);
+  /** Écart de niveau moyen + pénalité de répartition des postes : plus c'est bas, mieux c'est. */
+  cost: number;
 }
 
 /** Regroupe les joueurs liés par une contrainte "ensemble" (union-find). */
@@ -69,13 +113,14 @@ function pickRandom<T>(items: T[]): T {
 
 /**
  * Répartit les joueurs en deux équipes de taille équivalente (écart max. de 1) en minimisant
- * l'écart de niveau moyen, tout en respectant les contraintes "ensemble" / "séparés".
+ * l'écart de niveau moyen, puis en répartissant les postes, tout en respectant les contraintes
+ * "ensemble" / "séparés".
  * Avec 10 joueurs max, toutes les répartitions sont évaluées (au plus 2^9).
  */
 export function balanceTeams(
   players: Player[],
   constraints: PairingConstraint[] = [],
-  { shuffle = false, exclude }: BalanceOptions = {},
+  { shuffle = false, exclude, getLevel = manualLevel }: BalanceOptions = {},
 ): BalanceResult {
   if (players.length < 2) {
     return { ok: false, reason: 'Il faut au moins 2 joueurs pour former deux équipes.' };
@@ -129,17 +174,19 @@ export function balanceTeams(
     const teamAIds = new Set(teamA.map((player) => player.id));
     if (apartPairs.some(([a, b]) => teamAIds.has(a) === teamAIds.has(b))) continue;
 
-    const gap = Math.abs(sumSkill(teamA) / teamA.length - sumSkill(teamB) / teamB.length);
-    candidates.push({ teamA, teamB, gap });
+    const averageA = teamA.reduce((sum, player) => sum + getLevel(player), 0) / teamA.length;
+    const averageB = teamB.reduce((sum, player) => sum + getLevel(player), 0) / teamB.length;
+    const cost = Math.abs(averageA - averageB) + POSITION_WEIGHT * positionImbalance(teamA, teamB);
+    candidates.push({ teamA, teamB, cost });
   }
 
   if (candidates.length === 0) {
     return { ok: false, reason: 'Aucune répartition possible avec ces conditions.' };
   }
 
-  const bestGap = Math.min(...candidates.map((candidate) => candidate.gap));
-  const maxGap = bestGap + (shuffle ? SHUFFLE_TOLERANCE : 0) + EPSILON;
-  let pool = candidates.filter((candidate) => candidate.gap <= maxGap);
+  const bestCost = Math.min(...candidates.map((candidate) => candidate.cost));
+  const maxCost = bestCost + (shuffle ? SHUFFLE_TOLERANCE : 0) + EPSILON;
+  let pool = candidates.filter((candidate) => candidate.cost <= maxCost);
 
   if (exclude) {
     pool = pool.filter((candidate) => !isSameSplit(candidate.teamA, exclude));
@@ -149,7 +196,7 @@ export function balanceTeams(
   }
 
   const { teamA, teamB } = pickRandom(pool);
-  const bySkill = (a: Player, b: Player) => b.skillLevel - a.skillLevel;
+  const bySkill = (a: Player, b: Player) => getLevel(b) - getLevel(a);
 
   return {
     ok: true,

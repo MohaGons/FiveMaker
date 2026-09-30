@@ -10,9 +10,13 @@ interface PlayerCardProps {
   player: Player;
   onEdit?: (player: Player) => void;
   onDelete?: (player: Player) => void;
+  /** Niveau ajusté selon les résultats, affiché à la place du niveau de la fiche. */
+  level?: number;
 }
 
-export function PlayerCard({ player, onEdit, onDelete }: PlayerCardProps) {
+export function PlayerCard({ player, onEdit, onDelete, level }: PlayerCardProps) {
+  const displayedLevel = level ?? player.skillLevel;
+
   return (
     <Card className="p-4 transition hover:shadow-md">
       <div className="flex items-start gap-3">
@@ -26,11 +30,11 @@ export function PlayerCard({ player, onEdit, onDelete }: PlayerCardProps) {
           <p className="text-sm text-muted-foreground">{getPositionLabel(player.preferredPosition)}</p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 pt-1" title={`Niveau ${player.skillLevel}/5`}>
+        <div className="flex shrink-0 items-center gap-0.5 pt-1" title={`Niveau ${level === undefined ? displayedLevel : displayedLevel.toFixed(1)}/5`}>
           {Array.from({ length: 5 }, (_, index) => (
             <span
               key={index}
-              className={`h-2 w-2 rounded-full ${index < player.skillLevel ? 'bg-primary' : 'bg-muted'}`}
+              className={`h-2 w-2 rounded-full ${index < Math.round(displayedLevel) ? 'bg-primary' : 'bg-muted'}`}
             />
           ))}
         </div>

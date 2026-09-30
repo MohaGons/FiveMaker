@@ -1,15 +1,21 @@
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { Check } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { PlayerCard } from '../../players/components/PlayerCard';
+import type { Player } from '../../players/types';
 import type { Team } from '../types';
-import { getAverageSkill } from '../utils/balanceTeams';
+import { countPositions, getAverageSkill } from '../utils/balanceTeams';
+import type { GetLevel } from '../utils/balanceTeams';
+import { playerDropId, teamDropId } from '../utils/dropTargets';
 import { DEFAULT_TEAM_COLORS, TEAM_COLOR_OPTIONS, tint } from '../utils/teamColors';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface TeamColumnProps {
+  index: 0 | 1;
   team: Team;
+  getLevel?: GetLevel;
   /** Nom tel que saisi (peut être vide pendant la frappe), affiché dans le champ d'édition. */
   nameInput?: string;
   onNameChange?: (name: string) => void;
@@ -19,12 +25,39 @@ interface TeamColumnProps {
 /** Couleurs claires : la coche doit être foncée pour rester visible. */
 const LIGHT_COLORS = new Set(['#f5f5f5', '#eab308']);
 
-export function TeamColumn({ team, nameInput, onNameChange, onColorChange }: TeamColumnProps) {
-  const color = team.color ?? DEFAULT_TEAM_COLORS[0];
+function DraggablePlayer({ player, level }: { player: Player; level?: number }) {
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: player.id });
+  // Déposer un joueur sur un autre l'échange avec lui.
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: playerDropId(player.id) });
+
+  return (
+    <div
+      ref={(node) => {
+        setDragRef(node);
+        setDropRef(node);
+      }}
+      {...attributes}
+      {...listeners}
+      className={cn(
+        'cursor-grab touch-none rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing',
+        isDragging && 'opacity-30',
+        isOver && !isDragging && 'ring-2 ring-primary',
+      )}
+    >
+      <PlayerCard player={player} level={level} />
+    </div>
+  );
+}
+
+export function TeamColumn({ index, team, getLevel, nameInput, onNameChange, onColorChange }: TeamColumnProps) {
+  const color = team.color ?? DEFAULT_TEAM_COLORS[index];
+  const { setNodeRef, isOver } = useDroppable({ id: teamDropId(index) });
+  const positions = countPositions(team.players);
 
   return (
     <Card
-      className="p-4 ring-2"
+      ref={setNodeRef}
+      className={cn('p-4 ring-2 transition-colors', isOver && 'bg-muted/60')}
       style={{ '--tw-ring-color': tint(color, 45) } as CSSProperties}
     >
       <div className="flex items-center justify-between gap-2">
@@ -50,9 +83,13 @@ export function TeamColumn({ team, nameInput, onNameChange, onColorChange }: Tea
           <span className="shrink-0 text-sm text-muted-foreground">({team.players.length})</span>
         </div>
         <Badge className="shrink-0 text-foreground" style={{ backgroundColor: tint(color, 18) }}>
-          Niveau moyen {getAverageSkill(team).toFixed(1)}
+          Niveau moyen {getAverageSkill(team, getLevel).toFixed(1)}
         </Badge>
       </div>
+
+      <p className="-mt-1 text-xs text-muted-foreground">
+        {positions.defender} déf. · {positions.midfielder} mil. · {positions.forward} att.
+      </p>
 
       {onColorChange && (
         <div role="radiogroup" aria-label="Couleur de l'équipe" className="flex flex-wrap gap-1.5">
@@ -84,9 +121,9 @@ export function TeamColumn({ team, nameInput, onNameChange, onColorChange }: Tea
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
+      <div className="flex min-h-16 flex-col gap-3">
         {team.players.map((player) => (
-          <PlayerCard key={player.id} player={player} />
+          <DraggablePlayer key={player.id} player={player} level={getLevel?.(player)} />
         ))}
       </div>
     </Card>

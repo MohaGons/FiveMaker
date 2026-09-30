@@ -1,18 +1,22 @@
 import { useState } from 'react';
-import { Shuffle } from 'lucide-react';
+import { Shuffle, TriangleAlert } from 'lucide-react';
 import { SaveMatchForm } from '../features/matches/components/SaveMatchForm';
 import { useMatches } from '../features/matches/hooks/useMatches';
 import type { MatchInput } from '../features/matches/hooks/useMatches';
+import { computePlayerLevels } from '../features/matches/utils/playerLevels';
 import { usePlayers } from '../features/players/hooks/usePlayers';
 import { PairingConstraintsPanel } from '../features/teams/components/PairingConstraintsPanel';
 import { PlayerSelector } from '../features/teams/components/PlayerSelector';
-import { TeamColumn } from '../features/teams/components/TeamColumn';
+import { TeamsBoard } from '../features/teams/components/TeamsBoard';
 import { usePairingConstraints } from '../features/teams/hooks/usePairingConstraints';
 import { useTeamLabels } from '../features/teams/hooks/useTeamLabels';
 import type { Team } from '../features/teams/types';
-import { balanceTeams } from '../features/teams/utils/balanceTeams';
+import { balanceTeams, findViolatedConstraints } from '../features/teams/utils/balanceTeams';
+import type { GetLevel } from '../features/teams/utils/balanceTeams';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
 import type { ID } from '../shared/types/common';
 
@@ -21,13 +25,14 @@ const MAX_PLAYERS = 10;
 
 export function TeamBalancerPage() {
   const { players, isLoading, error } = usePlayers();
-  const { addMatch } = useMatches();
+  const { matches, addMatch } = useMatches();
   const { constraints, addConstraint, removeConstraint } = usePairingConstraints();
   const { labels, updateLabel, getTeamName } = useTeamLabels();
   // null = pas encore touché par l'utilisateur -> les premiers joueurs chargés (jusqu'à 10) sont présents par défaut.
   const [customSelectedIds, setCustomSelectedIds] = useState<Set<ID> | null>(null);
   const [teams, setTeams] = useState<[Team, Team] | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [useAdjustedLevels, setUseAdjustedLevels] = useState(true);
   const [isSaveFormOpen, setIsSaveFormOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -36,6 +41,17 @@ export function TeamBalancerPage() {
   const selectedIds =
     customSelectedIds ?? new Set(players.slice(0, MAX_PLAYERS).map((player) => player.id));
   const isSelectionLimitReached = selectedIds.size >= MAX_PLAYERS;
+
+  const playerLevels = computePlayerLevels(matches, players);
+  const ratedMatchCount = matches.filter((match) => match.status === 'completed' && match.score).length;
+  // Sans match avec score, le niveau ajusté est identique à celui de la fiche : inutile de proposer l'option.
+  const getLevel: GetLevel | undefined =
+    useAdjustedLevels && ratedMatchCount > 0
+      ? (player) => playerLevels.get(player.id)?.level ?? player.skillLevel
+      : undefined;
+
+  const playersById = new Map(players.map((player) => [player.id, player]));
+  const violatedConstraints = teams ? findViolatedConstraints(teams, constraints) : [];
 
   // Noms et couleurs choisis par l'utilisateur, conservés quand on remélange.
   const displayedTeams: [Team, Team] | null = teams && [
@@ -58,6 +74,7 @@ export function TeamBalancerPage() {
     const result = balanceTeams(selectedPlayers, constraints, {
       shuffle,
       exclude: shuffle ? (teams ?? undefined) : undefined,
+      getLevel,
     });
 
     setSaveSuccess(null);
@@ -69,6 +86,12 @@ export function TeamBalancerPage() {
       // Un remélange impossible laisse les équipes actuelles, qui restent valables.
       if (!shuffle) setTeams(null);
     }
+  }
+
+  function handleTeamsChange(next: [Team, Team]) {
+    setTeams(next);
+    setBalanceError(null);
+    setSaveSuccess(null);
   }
 
   async function handleSaveMatch(input: MatchInput) {
@@ -116,6 +139,7 @@ export function TeamBalancerPage() {
                   players={players}
                   selectedIds={selectedIds}
                   onToggle={toggleSelection}
+                  getLevel={getLevel}
                   selectionLimitReached={isSelectionLimitReached}
                 />
                 {isSelectionLimitReached && (
@@ -130,6 +154,21 @@ export function TeamBalancerPage() {
                   onAdd={addConstraint}
                   onRemove={removeConstraint}
                 />
+                {ratedMatchCount > 0 && (
+                  <Label className="mt-6 flex items-start gap-2 text-sm font-normal">
+                    <Checkbox
+                      checked={useAdjustedLevels}
+                      onCheckedChange={(checked) => setUseAdjustedLevels(checked === true)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Ajuster les niveaux selon les résultats
+                      <span className="block text-xs text-muted-foreground">
+                        Calculé à partir de {ratedMatchCount} match{ratedMatchCount > 1 ? 's' : ''} avec score.
+                      </span>
+                    </span>
+                  </Label>
+                )}
               </>
             )}
 
@@ -150,17 +189,33 @@ export function TeamBalancerPage() {
           <div>
             {displayedTeams ? (
               <>
-                <div className="grid gap-6 sm:grid-cols-2">
-                  {([0, 1] as const).map((index) => (
-                    <TeamColumn
-                      key={index}
-                      team={displayedTeams[index]}
-                      nameInput={labels[index].name}
-                      onNameChange={(name) => updateLabel(index, { name })}
-                      onColorChange={(color) => updateLabel(index, { color })}
-                    />
-                  ))}
-                </div>
+                <TeamsBoard
+                  teams={displayedTeams}
+                  labels={labels}
+                  getLevel={getLevel}
+                  onTeamsChange={handleTeamsChange}
+                  onLabelChange={updateLabel}
+                />
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Glisse un joueur vers l'autre équipe pour le déplacer, ou sur un joueur pour les échanger
+                  (appui long sur mobile).
+                </p>
+
+                {violatedConstraints.length > 0 && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+                    <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    <ul>
+                      {violatedConstraints.map((constraint) => {
+                        const [a, b] = constraint.playerIds.map((id) => playersById.get(id)?.name);
+                        return (
+                          <li key={constraint.id}>
+                            Condition non respectée : {a} {constraint.rule === 'together' ? 'avec' : 'contre'} {b}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <Button

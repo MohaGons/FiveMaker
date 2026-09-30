@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, Search } from 'lucide-react';
 import type { ID } from '../../../shared/types/common';
 import type { Player } from '../../players/types';
 import { getPositionLabel } from '../../players/utils/position';
+import type { GetLevel } from '../utils/balanceTeams';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +25,31 @@ interface PlayerSelectorProps {
   selectedIds: Set<ID>;
   onToggle: (id: ID) => void;
   selectionLimitReached?: boolean;
+  /** Niveau ajusté selon les résultats ; sinon le niveau de la fiche est affiché. */
+  getLevel?: GetLevel;
+}
+
+/** En dessous, l'écart avec le niveau de la fiche n'est pas signalé. */
+const LEVEL_TREND_THRESHOLD = 0.05;
+
+function LevelLabel({ player, getLevel }: { player: Player; getLevel?: GetLevel }) {
+  if (!getLevel) {
+    return <span className="shrink-0 text-xs font-medium text-primary">Niv. {player.skillLevel}</span>;
+  }
+
+  const level = getLevel(player);
+  const trend = level - player.skillLevel;
+
+  return (
+    <span
+      className="flex shrink-0 items-center gap-0.5 text-xs font-medium text-primary"
+      title={`Niveau de la fiche : ${player.skillLevel}`}
+    >
+      {trend >= LEVEL_TREND_THRESHOLD && <ArrowUp className="h-3 w-3 text-green-600 dark:text-green-400" />}
+      {trend <= -LEVEL_TREND_THRESHOLD && <ArrowDown className="h-3 w-3 text-red-600 dark:text-red-400" />}
+      Niv. {level.toFixed(1)}
+    </span>
+  );
 }
 
 export function PlayerSelector({
@@ -31,6 +57,7 @@ export function PlayerSelector({
   selectedIds,
   onToggle,
   selectionLimitReached = false,
+  getLevel,
 }: PlayerSelectorProps) {
   const [query, setQuery] = useState('');
   const normalizedQuery = normalize(query);
@@ -77,7 +104,7 @@ export function PlayerSelector({
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {getPositionLabel(player.preferredPosition)}
                 </span>
-                <span className="shrink-0 text-xs font-medium text-primary">Niv. {player.skillLevel}</span>
+                <LevelLabel player={player} getLevel={getLevel} />
               </Label>
             );
           })}
