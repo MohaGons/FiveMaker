@@ -65,6 +65,24 @@ create policy "Matches are managed by their owner"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+-- Composition en cours du prochain match (un brouillon par compte) : joueurs confirmés au fil de l'eau
+-- et conditions "ensemble" / "séparés", retrouvés sur tous les appareils.
+create table if not exists public.lineup_drafts (
+  user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  player_ids jsonb not null default '[]'::jsonb,
+  pairing_constraints jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.lineup_drafts enable row level security;
+
+drop policy if exists "Lineup drafts are managed by their owner" on public.lineup_drafts;
+create policy "Lineup drafts are managed by their owner"
+  on public.lineup_drafts
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- Photos des joueurs : bucket public en lecture, chaque utilisateur n'écrit que dans son dossier "<uid>/...".
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('avatars', 'avatars', true, 1048576, array['image/jpeg', 'image/png', 'image/webp'])

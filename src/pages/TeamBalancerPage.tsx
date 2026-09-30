@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shuffle, TriangleAlert } from 'lucide-react';
+import { Check, CloudOff, Loader2, Shuffle, TriangleAlert } from 'lucide-react';
 import { SaveMatchForm } from '../features/matches/components/SaveMatchForm';
 import { useMatches } from '../features/matches/hooks/useMatches';
 import type { MatchInput } from '../features/matches/hooks/useMatches';
@@ -7,13 +7,16 @@ import { computePlayerLevels } from '../features/matches/utils/playerLevels';
 import { usePlayers } from '../features/players/hooks/usePlayers';
 import { PairingConstraintsPanel } from '../features/teams/components/PairingConstraintsPanel';
 import { PlayerSelector } from '../features/teams/components/PlayerSelector';
+import { ProvisionalLineup } from '../features/teams/components/ProvisionalLineup';
 import { ShareTeamsButtons } from '../features/teams/components/ShareTeamsButtons';
 import { TeamsBoard } from '../features/teams/components/TeamsBoard';
-import { usePairingConstraints } from '../features/teams/hooks/usePairingConstraints';
+import { useLineupDraft } from '../features/teams/hooks/useLineupDraft';
+import type { DraftSaveStatus } from '../features/teams/hooks/useLineupDraft';
 import { useTeamLabels } from '../features/teams/hooks/useTeamLabels';
 import type { Team } from '../features/teams/types';
 import { balanceTeams, findViolatedConstraints } from '../features/teams/utils/balanceTeams';
 import type { GetLevel } from '../features/teams/utils/balanceTeams';
+import { planRecruits } from '../features/teams/utils/planRecruits';
 import { formatTeamsMessage } from '../features/teams/utils/shareMessage';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -25,13 +28,37 @@ import type { ID } from '../shared/types/common';
 /** Un five oppose deux équipes de 5 joueurs maximum. */
 const MAX_PLAYERS = 10;
 
+function DraftSaveIndicator({ status }: { status: DraftSaveStatus }) {
+  if (status === 'saving') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Enregistrement...
+      </span>
+    );
+  }
+  if (status === 'saved') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Check className="h-3 w-3" /> Enregistré
+      </span>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+        <CloudOff className="h-3 w-3" /> Non enregistré
+      </span>
+    );
+  }
+  return null;
+}
+
 export function TeamBalancerPage() {
-  const { players, isLoading, error } = usePlayers();
+  const { players, isLoading: isLoadingPlayers, error } = usePlayers();
   const { matches, addMatch } = useMatches();
-  const { constraints, addConstraint, removeConstraint } = usePairingConstraints();
+  const draft = useLineupDraft();
+  const { constraints, addConstraint, removeConstraint } = draft;
   const { labels, updateLabel, getTeamName } = useTeamLabels();
-  // null = pas encore touché par l'utilisateur -> les premiers joueurs chargés (jusqu'à 10) sont présents par défaut.
-  const [customSelectedIds, setCustomSelectedIds] = useState<Set<ID> | null>(null);
   const [teams, setTeams] = useState<[Team, Team] | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [useAdjustedLevels, setUseAdjustedLevels] = useState(true);
@@ -40,8 +67,10 @@ export function TeamBalancerPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
 
-  const selectedIds =
-    customSelectedIds ?? new Set(players.slice(0, MAX_PLAYERS).map((player) => player.id));
+  const isLoading = isLoadingPlayers || draft.isLoading;
+  // Un joueur supprimé depuis peut encore figurer dans le brouillon : on ne garde que les joueurs existants.
+  const selectedPlayers = players.filter((player) => draft.selectedIds.has(player.id));
+  const selectedIds = new Set(selectedPlayers.map((player) => player.id));
   const isSelectionLimitReached = selectedIds.size >= MAX_PLAYERS;
 
   const playerLevels = computePlayerLevels(matches, players);
@@ -52,6 +81,15 @@ export function TeamBalancerPage() {
       ? (player) => playerLevels.get(player.id)?.level ?? player.skillLevel
       : undefined;
 
+  const levelOf = getLevel ?? ((player) => player.skillLevel);
+  // Niveau habituel du groupe : là où l'on recrute les joueurs manquants.
+  const referenceLevel =
+    players.length > 0 ? players.reduce((sum, player) => sum + levelOf(player), 0) / players.length : 3;
+  const recruitPlan =
+    !teams && selectedPlayers.length > 0 && selectedPlayers.length < MAX_PLAYERS
+      ? planRecruits(selectedPlayers, constraints, referenceLevel, getLevel)
+      : null;
+
   const playersById = new Map(players.map((player) => [player.id, player]));
   const violatedConstraints = teams ? findViolatedConstraints(teams, constraints) : [];
 
@@ -61,18 +99,25 @@ export function TeamBalancerPage() {
     { ...teams[1], name: getTeamName(1), color: labels[1].color },
   ];
 
+  // Les équipes générées ne correspondent plus à la sélection : on revient à la composition provisoire.
+  function resetGeneratedTeams() {
+    setTeams(null);
+    setBalanceError(null);
+    setSaveSuccess(null);
+  }
+
   function toggleSelection(id: ID) {
-    const next = new Set(selectedIds);
-    if (next.has(id)) {
-      next.delete(id);
-    } else if (next.size < MAX_PLAYERS) {
-      next.add(id);
-    }
-    setCustomSelectedIds(next);
+    draft.togglePlayer(id, MAX_PLAYERS);
+    resetGeneratedTeams();
+  }
+
+  function handleClearSelection() {
+    if (!window.confirm('Retirer tous les joueurs de la composition ? Les conditions sont conservées.')) return;
+    draft.clearPlayers();
+    resetGeneratedTeams();
   }
 
   function handleBalance(shuffle: boolean) {
-    const selectedPlayers = players.filter((player) => selectedIds.has(player.id));
     const result = balanceTeams(selectedPlayers, constraints, {
       shuffle,
       exclude: shuffle ? (teams ?? undefined) : undefined,
@@ -118,14 +163,30 @@ export function TeamBalancerPage() {
       <main className="mx-auto max-w-6xl px-6 py-12">
         <h1 className="text-3xl font-bold text-foreground">Équilibrer les équipes</h1>
         <p className="mt-2 text-muted-foreground">
-          Sélectionne les joueurs présents, puis génère deux équipes équilibrées.
+          Coche les joueurs au fur et à mesure qu'ils confirment : la composition est enregistrée, et l'appli te
+          dit quels profils recruter pour les places restantes.
         </p>
+        {draft.loadError && (
+          <p className="mt-3 text-sm text-red-600 dark:text-red-400">
+            La composition ne peut pas être enregistrée ({draft.loadError}). As-tu relancé supabase/schema.sql ?
+          </p>
+        )}
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,360px)_1fr]">
           <div>
-            <h2 className="mb-3 font-semibold text-foreground">
-              Joueurs présents ({selectedIds.size}/{MAX_PLAYERS})
-            </h2>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="font-semibold text-foreground">
+                Joueurs présents ({selectedIds.size}/{MAX_PLAYERS})
+              </h2>
+              <div className="flex items-center gap-2">
+                <DraftSaveIndicator status={draft.saveStatus} />
+                {selectedIds.size > 0 && (
+                  <Button type="button" variant="ghost" size="xs" onClick={handleClearSelection}>
+                    Vider
+                  </Button>
+                )}
+              </div>
+            </div>
 
             {isLoading ? (
               <p className="text-sm text-muted-foreground">Chargement des joueurs...</p>
@@ -183,6 +244,11 @@ export function TeamBalancerPage() {
             >
               Équilibrer les équipes
             </Button>
+            {selectedIds.size > 0 && selectedIds.size < MAX_PLAYERS && (
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Tu peux déjà équilibrer, ou attendre que les {MAX_PLAYERS} joueurs soient là.
+              </p>
+            )}
             {balanceError && !teams && (
               <p className="mt-2 text-sm text-red-600 dark:text-red-400">{balanceError}</p>
             )}
@@ -249,9 +315,24 @@ export function TeamBalancerPage() {
                   )}
                 </div>
               </>
+            ) : recruitPlan ? (
+              recruitPlan.ok ? (
+                <ProvisionalLineup
+                  plan={recruitPlan.plan}
+                  teamNames={[getTeamName(0), getTeamName(1)]}
+                  teamColors={[labels[0].color, labels[1].color]}
+                  getLevel={getLevel}
+                />
+              ) : (
+                <div className="flex h-full min-h-[200px] items-center justify-center rounded-2xl border border-dashed p-12 text-center text-sm text-red-600 dark:text-red-400">
+                  {recruitPlan.reason}
+                </div>
+              )
             ) : (
               <div className="flex h-full min-h-[200px] items-center justify-center rounded-2xl border border-dashed p-12 text-center text-sm text-muted-foreground">
-                Les équipes générées s'afficheront ici.
+                {selectedIds.size === MAX_PLAYERS
+                  ? 'Tout le monde est là ! Clique sur « Équilibrer les équipes ».'
+                  : 'Coche les joueurs qui ont confirmé : les équipes provisoires et les profils à recruter s\'afficheront ici.'}
               </div>
             )}
           </div>
