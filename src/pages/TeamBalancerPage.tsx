@@ -1,18 +1,19 @@
 import { useState } from 'react';
-import { Check, CloudOff, Loader2, Shuffle, TriangleAlert } from 'lucide-react';
+import { Shuffle } from 'lucide-react';
 import { useCurrentGroup } from '../features/groups/hooks/useGroups';
 import { SaveMatchForm } from '../features/matches/components/SaveMatchForm';
 import { useMatches } from '../features/matches/hooks/useMatches';
 import type { MatchInput } from '../features/matches/hooks/useMatches';
 import { computePlayerLevels } from '../features/matches/utils/playerLevels';
 import { usePlayers } from '../features/players/hooks/usePlayers';
+import { ConstraintViolationsAlert } from '../features/teams/components/ConstraintViolationsAlert';
+import { DraftSaveIndicator } from '../features/teams/components/DraftSaveIndicator';
 import { PairingConstraintsPanel } from '../features/teams/components/PairingConstraintsPanel';
 import { PlayerSelector } from '../features/teams/components/PlayerSelector';
 import { ProvisionalLineup } from '../features/teams/components/ProvisionalLineup';
 import { ShareTeamsButtons } from '../features/teams/components/ShareTeamsButtons';
 import { TeamsBoard } from '../features/teams/components/TeamsBoard';
 import { useLineupDraft } from '../features/teams/hooks/useLineupDraft';
-import type { DraftSaveStatus } from '../features/teams/hooks/useLineupDraft';
 import { useTeamLabels } from '../features/teams/hooks/useTeamLabels';
 import type { Team } from '../features/teams/types';
 import { balanceTeams, findViolatedConstraints } from '../features/teams/utils/balanceTeams';
@@ -28,31 +29,6 @@ import type { ID } from '../shared/types/common';
 
 /** Un five oppose deux équipes de 5 joueurs maximum. */
 const MAX_PLAYERS = 10;
-
-function DraftSaveIndicator({ status }: { status: DraftSaveStatus }) {
-  if (status === 'saving') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" /> Enregistrement...
-      </span>
-    );
-  }
-  if (status === 'saved') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-        <Check className="h-3 w-3" /> Enregistré
-      </span>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-        <CloudOff className="h-3 w-3" /> Non enregistré
-      </span>
-    );
-  }
-  return null;
-}
 
 export function TeamBalancerPage() {
   const { players, isLoading: isLoadingPlayers, error } = usePlayers();
@@ -276,21 +252,7 @@ export function TeamBalancerPage() {
                   (appui long sur mobile).
                 </p>
 
-                {violatedConstraints.length > 0 && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
-                    <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                    <ul>
-                      {violatedConstraints.map((constraint) => {
-                        const [a, b] = constraint.playerIds.map((id) => playersById.get(id)?.name);
-                        return (
-                          <li key={constraint.id}>
-                            Condition non respectée : {a} {constraint.rule === 'together' ? 'avec' : 'contre'} {b}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                )}
+                <ConstraintViolationsAlert violations={violatedConstraints} playersById={playersById} />
 
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <Button

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Check, Copy, Crown, LogOut, MessageCircle, RefreshCw, Shield, Trash2, UserMinus } from 'lucide-react';
+import { LogOut, Trash2 } from 'lucide-react';
 import { useAuth } from '../features/auth/hooks/useAuth';
 import {
   deleteGroup,
@@ -13,70 +13,17 @@ import {
   renameGroup,
   updateMemberRole,
 } from '../features/groups/api/groupsApi';
-import { CreateGroupForm } from '../features/groups/components/CreateGroupForm';
+import { InviteLinkCard } from '../features/groups/components/InviteLinkCard';
+import { MemberList } from '../features/groups/components/MemberList';
+import { MyGroupsCard } from '../features/groups/components/MyGroupsCard';
+import { RoleBadge } from '../features/groups/components/RoleBadge';
 import { useCurrentGroup, useGroups } from '../features/groups/hooks/useGroups';
-import type { GroupMember, GroupRole } from '../features/groups/types';
+import type { GroupMember } from '../features/groups/types';
 import { usePlayers } from '../features/players/hooks/usePlayers';
-import type { Player } from '../features/players/types';
-import { getWhatsAppShareUrl } from '../features/teams/utils/shareMessage';
 import { SiteHeader } from '../shared/components/layout/SiteHeader';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-const ROLE_LABELS: Record<GroupRole, string> = { owner: 'Créateur', admin: 'Admin', member: 'Membre' };
-
-const JOINED_FORMATTER = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-
-function RoleBadge({ role }: { role: GroupRole }) {
-  const Icon = role === 'owner' ? Crown : role === 'admin' ? Shield : null;
-  return (
-    <Badge variant={role === 'member' ? 'secondary' : 'default'}>
-      {Icon && <Icon data-icon="inline-start" />}
-      {ROLE_LABELS[role]}
-    </Badge>
-  );
-}
-
-/** Valeur du menu pour « aucune fiche » (les valeurs sont des identifiants de fiche). */
-const NO_PLAYER = '';
-
-interface PlayerLinkSelectProps {
-  member: GroupMember;
-  players: Player[];
-  onChange: (playerId: string | null) => void;
-}
-
-/** Créateur : choisir la fiche joueur d'un membre, parmi les fiches libres (ou la sienne actuelle). */
-function PlayerLinkSelect({ member, players, onChange }: PlayerLinkSelectProps) {
-  const current = players.find((player) => player.accountUserId === member.userId);
-  const options = players.filter((player) => !player.accountUserId || player.accountUserId === member.userId);
-  const items = [
-    { value: NO_PLAYER, label: 'Aucune fiche' },
-    ...options.map((player) => ({ value: player.id, label: player.name })),
-  ];
-
-  return (
-    <Select
-      value={current?.id ?? NO_PLAYER}
-      onValueChange={(value) => onChange(value ? (value as string) : null)}
-      items={items}
-    >
-      <SelectTrigger size="sm" aria-label={`Fiche joueur de ${member.displayName}`} className="w-40">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
@@ -84,14 +31,13 @@ function errorMessage(err: unknown, fallback: string): string {
 
 export function GroupPage() {
   const { session } = useAuth();
-  const { groups, selectGroup, refreshGroups } = useGroups();
+  const { refreshGroups } = useGroups();
   const { group, canEdit, isOwner } = useCurrentGroup();
   const { players, linkPlayerToMember, forgetMemberLink } = usePlayers();
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(true);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [groupName, setGroupName] = useState(group.name);
-  const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const currentUserId = session?.user.id;
@@ -125,12 +71,6 @@ export function GroupPage() {
     };
   }, [group.id, canEdit]);
 
-  useEffect(() => {
-    if (!copied) return;
-    const timeout = setTimeout(() => setCopied(false), 2000);
-    return () => clearTimeout(timeout);
-  }, [copied]);
-
   /** Exécute une action et affiche son erreur éventuelle. */
   async function run(action: () => Promise<void>, fallback: string) {
     setActionError(null);
@@ -149,20 +89,6 @@ export function GroupPage() {
       await renameGroup(group.id, name);
       await refreshGroups();
     }, 'Renommage impossible.');
-  }
-
-  async function handleCopyInvite() {
-    if (!inviteUrl) return;
-    await run(async () => {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopied(true);
-    }, 'Copie impossible.');
-  }
-
-  function handleShareInvite() {
-    if (!inviteUrl) return;
-    const message = `⚽ Rejoins le groupe *${group.name}* sur FiveMaker :\n${inviteUrl}`;
-    window.open(getWhatsAppShareUrl(message), '_blank', 'noopener,noreferrer');
   }
 
   async function handleRegenerateInvite() {
@@ -267,120 +193,26 @@ export function GroupPage() {
         )}
 
         {canEdit && (
-          <Card className="p-5">
-            <div>
-              <h2 className="font-semibold text-foreground">Inviter des membres</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Toute personne qui ouvre ce lien et se connecte rejoint le groupe en tant que membre.
-              </p>
-            </div>
-            {inviteUrl ? (
-              <>
-                <Input value={inviteUrl} readOnly onFocus={(event) => event.target.select()} aria-label="Lien d'invitation" />
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={handleShareInvite}
-                    className="rounded-full bg-[#25D366] text-[#0b3d1f] hover:bg-[#1ebe5b]"
-                  >
-                    <MessageCircle />
-                    WhatsApp
-                  </Button>
-                  <Button type="button" variant="outline" onClick={handleCopyInvite} className="rounded-full">
-                    {copied ? <Check /> : <Copy />}
-                    {copied ? 'Copié !' : 'Copier'}
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={handleRegenerateInvite} className="rounded-full">
-                    <RefreshCw />
-                    Nouveau lien
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">Chargement du lien...</p>
-            )}
-          </Card>
+          <InviteLinkCard
+            groupName={group.name}
+            inviteUrl={inviteUrl}
+            onRegenerate={handleRegenerateInvite}
+            onError={setActionError}
+          />
         )}
 
-        <Card className="p-5">
-          <h2 className="font-semibold text-foreground">
-            Membres {!isLoadingMembers && <span className="font-normal text-muted-foreground">({members.length})</span>}
-          </h2>
-          {isLoadingMembers ? (
-            <p className="text-sm text-muted-foreground">Chargement des membres...</p>
-          ) : (
-            <ul className="divide-y">
-              {members.map((member) => {
-                const isSelf = member.userId === currentUserId;
-                const canManage = isOwner && member.role !== 'owner';
+        <MemberList
+          members={members}
+          players={players}
+          isLoading={isLoadingMembers}
+          currentUserId={currentUserId}
+          isOwner={isOwner}
+          onToggleAdmin={handleToggleAdmin}
+          onRemove={handleRemove}
+          onLinkPlayer={handleLinkPlayer}
+        />
 
-                return (
-                  <li key={member.userId} className="flex flex-wrap items-center gap-3 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-foreground">
-                        {member.displayName}
-                        {isSelf && <span className="font-normal text-muted-foreground"> (toi)</span>}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Membre depuis le {JOINED_FORMATTER.format(member.joinedAt)}
-                        {!isOwner &&
-                          ` · Fiche : ${players.find((player) => player.accountUserId === member.userId)?.name ?? 'aucune'}`}
-                      </p>
-                    </div>
-                    {isOwner && (
-                      <PlayerLinkSelect
-                        member={member}
-                        players={players}
-                        onChange={(playerId) => handleLinkPlayer(member, playerId)}
-                      />
-                    )}
-                    <RoleBadge role={member.role} />
-                    {canManage && (
-                      <div className="flex gap-1">
-                        <Button type="button" variant="outline" size="sm" onClick={() => handleToggleAdmin(member)}>
-                          {member.role === 'admin' ? 'Retirer admin' : 'Nommer admin'}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleRemove(member)}
-                          aria-label={`Exclure ${member.displayName}`}
-                          title="Exclure du groupe"
-                          className="hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <UserMinus />
-                        </Button>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <h2 className="font-semibold text-foreground">Mes groupes</h2>
-          <ul className="divide-y">
-            {groups.map((item) => (
-              <li key={item.id} className="flex items-center gap-3 py-2.5">
-                <p className="min-w-0 flex-1 truncate text-foreground">{item.name}</p>
-                <RoleBadge role={item.role} />
-                {item.id === group.id ? (
-                  <span className="w-20 text-center text-xs text-muted-foreground">Affiché</span>
-                ) : (
-                  <Button type="button" variant="outline" size="sm" onClick={() => selectGroup(item.id)} className="w-20">
-                    Ouvrir
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-          <div className="border-t pt-4">
-            <CreateGroupForm />
-          </div>
-        </Card>
+        <MyGroupsCard />
 
         <div className="flex justify-end">
           {isOwner ? (
