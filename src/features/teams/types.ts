@@ -17,3 +17,11 @@ export interface PairingConstraint {
   playerIds: [ID, ID];
   rule: PairingRule;
 }
+
+/** Réponse d'un joueur au sondage de présence du prochain match. */
+export interface LineupResponse {
+  playerId: ID;
+  attending: boolean;
+  /** Dernier changement de réponse : ordre de la liste d'attente. */
+  respondedAt: Date;
+}

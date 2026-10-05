@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Search, X } from 'lucide-react';
 import type { ID } from '../../../shared/types/common';
 import type { Player } from '../../players/types';
 import { getPositionLabel } from '../../players/utils/position';
@@ -29,6 +29,8 @@ interface PlayerSelectorProps {
   getLevel?: GetLevel;
   /** Consultation seule (membre sans droits) : les cases ne sont pas cochables. */
   readOnly?: boolean;
+  /** Réponses au sondage de présence (true : il vient). */
+  responseById?: Map<ID, boolean>;
 }
 
 /** En dessous, l'écart avec le niveau de la fiche n'est pas signalé. */
@@ -54,6 +56,16 @@ function LevelLabel({ player, getLevel }: { player: Player; getLevel?: GetLevel 
   );
 }
 
+function ResponseIcon({ response }: { response: boolean | undefined }) {
+  if (response === true) {
+    return <Check aria-label="A dit qu'il venait" className="h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400" />;
+  }
+  if (response === false) {
+    return <X aria-label="A dit qu'il ne venait pas" className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" />;
+  }
+  return null;
+}
+
 export function PlayerSelector({
   players,
   selectedIds,
@@ -61,6 +73,7 @@ export function PlayerSelector({
   selectionLimitReached = false,
   readOnly = false,
   getLevel,
+  responseById,
 }: PlayerSelectorProps) {
   const [query, setQuery] = useState('');
   const normalizedQuery = normalize(query);
@@ -104,7 +117,10 @@ export function PlayerSelector({
                 }`}
               >
                 <Checkbox checked={isSelected} disabled={isDisabled} onCheckedChange={() => onToggle(player.id)} />
-                <span className="flex-1 truncate text-sm font-medium text-foreground">{player.name}</span>
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <span className="truncate text-sm font-medium text-foreground">{player.name}</span>
+                  <ResponseIcon response={responseById?.get(player.id)} />
+                </span>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {getPositionLabel(player.preferredPosition)}
                 </span>

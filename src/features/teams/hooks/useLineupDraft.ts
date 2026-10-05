@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ID } from '../../../shared/types/common';
 import { useCurrentGroup } from '../../groups/hooks/useGroups';
-import { fetchLineupDraft, saveLineupDraft } from '../api/lineupDraftApi';
+import {
+  clearLineup,
+  fetchLineupDraft,
+  fetchLineupResponses,
+  respondToLineup,
+  saveLineupConstraints,
+  setLineupPlayer,
+} from '../api/lineupDraftApi';
 import type { LineupDraft } from '../api/lineupDraftApi';
-import type { PairingConstraint, PairingRule } from '../types';
+import type { LineupResponse, PairingConstraint, PairingRule } from '../types';
 
-/** Délai avant enregistrement : plusieurs clics rapprochés ne font qu'une écriture. */
+/** Délai avant enregistrement des conditions : plusieurs clics rapprochés ne font qu'une écriture. */
 const SAVE_DELAY_MS = 600;
 /** Ancien emplacement des conditions (navigateur uniquement), repris lors du premier chargement. */
 const LEGACY_CONSTRAINTS_KEY = 'pairing-constraints';
@@ -35,25 +42,33 @@ function isSamePair(constraint: PairingConstraint, [a, b]: [ID, ID]): boolean {
 }
 
 /**
- * Composition du prochain match construite au fil des confirmations : joueurs retenus et conditions,
- * enregistrés dans Supabase et partagés par tout le groupe.
+ * Composition du prochain match construite au fil des confirmations : joueurs retenus, conditions et
+ * réponses au sondage de présence, enregistrés dans Supabase et partagés par tout le groupe.
+ *
+ * Les joueurs sont modifiés un par un côté base (plusieurs membres peuvent répondre en même temps) ;
+ * les conditions, réservées aux admins, sont enregistrées d'un bloc après un court délai.
  */
 export function useLineupDraft() {
   const { group, canEdit } = useCurrentGroup();
   const groupId = group.id;
   const [draft, setDraft] = useState<LineupDraft>({ playerIds: [], constraints: [] });
+  const [responses, setResponses] = useState<LineupResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<DraftSaveStatus>('idle');
-  // Incrémenté à chaque modification de l'utilisateur : déclenche l'enregistrement (pas au chargement).
-  const [changeCount, setChangeCount] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
+  // Incrémenté à chaque modification des conditions : déclenche leur enregistrement (pas au chargement).
+  const [constraintChangeCount, setConstraintChangeCount] = useState(0);
+  // Numéro de la dernière écriture des joueurs : un résultat plus ancien arrivé en retard est ignoré.
+  const playerWriteRef = useRef(0);
 
   useEffect(() => {
     let isMounted = true;
 
-    fetchLineupDraft(groupId)
-      .then((stored) => {
+    Promise.all([fetchLineupDraft(groupId), fetchLineupResponses(groupId)])
+      .then(([stored, storedResponses]) => {
         if (!isMounted) return;
+        setResponses(storedResponses);
         if (stored) {
           setDraft(stored);
         } else {
@@ -63,7 +78,7 @@ export function useLineupDraft() {
           setDraft({ playerIds: [], constraints: legacyConstraints });
           if (legacyConstraints.length > 0) {
             setSaveStatus('saving');
-            setChangeCount((count) => count + 1);
+            setConstraintChangeCount((count) => count + 1);
           }
         }
       })
@@ -81,11 +96,29 @@ export function useLineupDraft() {
     };
   }, [groupId, canEdit]);
 
+  /** Recharge les joueurs et les réponses (pas les conditions, qui peuvent être en cours de saisie). */
+  async function refreshPlayers(): Promise<void> {
+    const writeId = playerWriteRef.current;
+    const [stored, storedResponses] = await Promise.all([fetchLineupDraft(groupId), fetchLineupResponses(groupId)]);
+    if (writeId !== playerWriteRef.current) return;
+    setDraft((current) => ({ ...current, playerIds: stored?.playerIds ?? [] }));
+    setResponses(storedResponses);
+  }
+
+  // Les autres membres répondent pendant que la page est ouverte : on se met à jour en y revenant.
   useEffect(() => {
-    if (changeCount === 0) return;
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') refreshPlayers().catch(() => {});
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  });
+
+  useEffect(() => {
+    if (constraintChangeCount === 0) return;
 
     const timeout = setTimeout(() => {
-      saveLineupDraft(groupId, draft)
+      saveLineupConstraints(groupId, draft.constraints)
         .then(() => {
           setSaveStatus('saved');
           forgetLegacyConstraints();
@@ -94,54 +127,89 @@ export function useLineupDraft() {
     }, SAVE_DELAY_MS);
 
     return () => clearTimeout(timeout);
-  }, [groupId, draft, changeCount]);
+  }, [groupId, draft.constraints, constraintChangeCount]);
 
-  function update(change: (current: LineupDraft) => LineupDraft): void {
-    setDraft(change);
+  /** Affiche tout de suite le changement, puis reprend la composition renvoyée par la base. */
+  async function writePlayers(optimistic: (ids: ID[]) => ID[], request: () => Promise<ID[]>): Promise<void> {
+    const writeId = ++playerWriteRef.current;
+    setDraft((current) => ({ ...current, playerIds: optimistic(current.playerIds) }));
     setSaveStatus('saving');
-    setChangeCount((count) => count + 1);
+    setActionError(null);
+
+    try {
+      const playerIds = await request();
+      if (writeId !== playerWriteRef.current) return;
+      setDraft((current) => ({ ...current, playerIds }));
+      setSaveStatus('saved');
+    } catch (err) {
+      if (writeId !== playerWriteRef.current) return;
+      setSaveStatus('error');
+      setActionError(err instanceof Error ? err.message : 'Enregistrement impossible.');
+      await refreshPlayers().catch(() => {});
+    }
   }
 
   function togglePlayer(id: ID, maxPlayers: number): void {
-    update((current) => {
-      if (current.playerIds.includes(id)) {
-        return { ...current, playerIds: current.playerIds.filter((playerId) => playerId !== id) };
-      }
-      if (current.playerIds.length >= maxPlayers) return current;
-      return { ...current, playerIds: [...current.playerIds, id] };
-    });
+    const included = !draft.playerIds.includes(id);
+    if (included && draft.playerIds.length >= maxPlayers) return;
+
+    void writePlayers(
+      (ids) => (included ? [...ids, id] : ids.filter((playerId) => playerId !== id)),
+      () => setLineupPlayer(groupId, id, included),
+    );
   }
 
+  /** Nouvelle composition : plus aucun joueur ni réponse au sondage. */
   function clearPlayers(): void {
-    update((current) => ({ ...current, playerIds: [] }));
+    setResponses([]);
+    void writePlayers(
+      () => [],
+      async () => {
+        await clearLineup(groupId);
+        return [];
+      },
+    );
+  }
+
+  /** Réponse du compte connecté au sondage. Lève une erreur si elle n'a pas pu être enregistrée. */
+  async function respond(attending: boolean): Promise<void> {
+    const writeId = ++playerWriteRef.current;
+    const playerIds = await respondToLineup(groupId, attending);
+    const storedResponses = await fetchLineupResponses(groupId).catch(() => null);
+    if (writeId !== playerWriteRef.current) return;
+    setDraft((current) => ({ ...current, playerIds }));
+    if (storedResponses) setResponses(storedResponses);
+  }
+
+  function updateConstraints(change: (current: PairingConstraint[]) => PairingConstraint[]): void {
+    setDraft((current) => ({ ...current, constraints: change(current.constraints) }));
+    setSaveStatus('saving');
+    setConstraintChangeCount((count) => count + 1);
   }
 
   /** Une seule condition par paire de joueurs : en ajouter une nouvelle remplace l'ancienne. */
   function addConstraint(playerIds: [ID, ID], rule: PairingRule): void {
-    update((current) => ({
-      ...current,
-      constraints: [
-        ...current.constraints.filter((constraint) => !isSamePair(constraint, playerIds)),
-        { id: crypto.randomUUID(), playerIds, rule },
-      ],
-    }));
+    updateConstraints((current) => [
+      ...current.filter((constraint) => !isSamePair(constraint, playerIds)),
+      { id: crypto.randomUUID(), playerIds, rule },
+    ]);
   }
 
   function removeConstraint(id: ID): void {
-    update((current) => ({
-      ...current,
-      constraints: current.constraints.filter((constraint) => constraint.id !== id),
-    }));
+    updateConstraints((current) => current.filter((constraint) => constraint.id !== id));
   }
 
   return {
     selectedIds: new Set(draft.playerIds),
     constraints: draft.constraints,
+    responses,
     isLoading,
     loadError,
     saveStatus,
+    actionError,
     togglePlayer,
     clearPlayers,
+    respond,
     addConstraint,
     removeConstraint,
   };

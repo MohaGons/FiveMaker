@@ -665,6 +665,165 @@ grant execute on function public.get_rating_averages(uuid) to authenticated;
 grant execute on function public.get_open_vote_counts(uuid) to authenticated;
 
 -- =====================================================================================================
+-- Sondage de présence pour le prochain match : chaque membre relié à sa fiche répond « je viens » ou
+-- « je ne viens pas ». Venir l'ajoute à la composition tant qu'il reste de la place (10 joueurs), sinon il
+-- passe en liste d'attente ; un inscrit qui se désiste laisse sa place au premier de la liste.
+-- La liste des joueurs de la composition ne change que via les fonctions ci-dessous : elles verrouillent
+-- la ligne, pour que deux réponses simultanées ne s'écrasent pas.
+-- =====================================================================================================
+
+create table if not exists public.lineup_responses (
+  group_id uuid not null references public.groups (id) on delete cascade,
+  player_id uuid not null references public.players (id) on delete cascade,
+  attending boolean not null,
+  -- Moment du dernier changement de réponse : ordre de la liste d'attente.
+  responded_at timestamptz not null default now(),
+  primary key (group_id, player_id)
+);
+
+alter table public.lineup_responses enable row level security;
+
+-- Lecture pour tout le groupe ; l'écriture passe par respond_to_lineup et clear_lineup.
+drop policy if exists "Group members read lineup responses" on public.lineup_responses;
+create policy "Group members read lineup responses"
+  on public.lineup_responses for select
+  using (public.is_group_member(group_id));
+
+-- Composition du groupe verrouillée jusqu'à la fin de la transaction, sans les joueurs supprimés depuis.
+create or replace function public.lock_lineup(gid uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  ids jsonb;
+begin
+  insert into public.lineup_drafts (group_id) values (gid) on conflict (group_id) do nothing;
+  select player_ids into ids from public.lineup_drafts where group_id = gid for update;
+
+  return coalesce(
+    (select jsonb_agg(entry.id order by entry.position)
+     from jsonb_array_elements_text(ids) with ordinality as entry (id, position)
+     where exists (select 1 from public.players p where p.id::text = entry.id and p.group_id = gid)),
+    '[]'::jsonb
+  );
+end;
+$$;
+
+-- Réponse du compte connecté ; renvoie la composition à jour.
+create or replace function public.respond_to_lineup(gid uuid, attending boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  my_player uuid;
+  ids jsonb;
+  next_player uuid;
+begin
+  if not public.is_group_member(gid) then
+    raise exception 'Groupe introuvable.';
+  end if;
+
+  select id into my_player from public.players where group_id = gid and account_user_id = auth.uid();
+  if my_player is null then
+    raise exception 'Indique quelle fiche joueur est la tienne pour pouvoir répondre.';
+  end if;
+
+  ids := public.lock_lineup(gid);
+
+  insert into public.lineup_responses as r (group_id, player_id, attending)
+  values (gid, my_player, respond_to_lineup.attending)
+  on conflict (group_id, player_id) do update
+    set attending = excluded.attending,
+        -- Redire « je viens » ne fait pas perdre sa place dans la liste d'attente.
+        responded_at = case when r.attending = excluded.attending then r.responded_at else now() end;
+
+  if respond_to_lineup.attending then
+    if not ids ? my_player::text and jsonb_array_length(ids) < 10 then
+      ids := ids || to_jsonb(my_player::text);
+    end if;
+  elsif ids ? my_player::text then
+    ids := ids - my_player::text;
+
+    select r.player_id into next_player
+    from public.lineup_responses r
+    where r.group_id = gid and r.attending and not ids ? r.player_id::text
+    order by r.responded_at
+    limit 1;
+
+    if next_player is not null then
+      ids := ids || to_jsonb(next_player::text);
+    end if;
+  end if;
+
+  update public.lineup_drafts set player_ids = ids, updated_at = now() where group_id = gid;
+  return ids;
+end;
+$$;
+
+-- Un admin coche ou décoche un joueur ; renvoie la composition à jour.
+create or replace function public.set_lineup_player(gid uuid, pid uuid, included boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  ids jsonb;
+begin
+  if not public.can_edit_group(gid) then
+    raise exception 'Seuls le créateur et les admins peuvent modifier la composition.';
+  end if;
+  if not exists (select 1 from public.players where id = pid and group_id = gid) then
+    raise exception 'Joueur introuvable.';
+  end if;
+
+  ids := public.lock_lineup(gid);
+
+  if included and not ids ? pid::text then
+    if jsonb_array_length(ids) >= 10 then
+      raise exception 'La composition est déjà complète (10 joueurs).';
+    end if;
+    ids := ids || to_jsonb(pid::text);
+  elsif not included then
+    ids := ids - pid::text;
+  end if;
+
+  update public.lineup_drafts set player_ids = ids, updated_at = now() where group_id = gid;
+  return ids;
+end;
+$$;
+
+-- Nouvelle composition : on retire tous les joueurs et on efface les réponses (les conditions restent).
+create or replace function public.clear_lineup(gid uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.can_edit_group(gid) then
+    raise exception 'Seuls le créateur et les admins peuvent modifier la composition.';
+  end if;
+
+  perform public.lock_lineup(gid);
+  update public.lineup_drafts set player_ids = '[]'::jsonb, updated_at = now() where group_id = gid;
+  delete from public.lineup_responses where group_id = gid;
+end;
+$$;
+
+revoke execute on function public.lock_lineup(uuid) from public, anon, authenticated;
+revoke execute on function public.respond_to_lineup(uuid, boolean) from public, anon;
+revoke execute on function public.set_lineup_player(uuid, uuid, boolean) from public, anon;
+revoke execute on function public.clear_lineup(uuid) from public, anon;
+grant execute on function public.respond_to_lineup(uuid, boolean) to authenticated;
+grant execute on function public.set_lineup_player(uuid, uuid, boolean) to authenticated;
+grant execute on function public.clear_lineup(uuid) to authenticated;
+
+-- =====================================================================================================
 -- Photos des joueurs : bucket public en lecture. On écrit dans "<id du groupe>/..." si on peut modifier
 -- le groupe (ou dans "<id du compte>/...", l'emplacement des photos d'avant les groupes).
 -- =====================================================================================================

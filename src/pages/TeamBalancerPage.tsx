@@ -6,6 +6,8 @@ import { useMatches } from '../features/matches/hooks/useMatches';
 import type { MatchInput } from '../features/matches/hooks/useMatches';
 import { computePlayerLevels } from '../features/matches/utils/playerLevels';
 import { usePlayers } from '../features/players/hooks/usePlayers';
+import { AttendanceCard } from '../features/teams/components/AttendanceCard';
+import { AttendanceOverview } from '../features/teams/components/AttendanceOverview';
 import { ConstraintViolationsAlert } from '../features/teams/components/ConstraintViolationsAlert';
 import { DraftSaveIndicator } from '../features/teams/components/DraftSaveIndicator';
 import { PairingConstraintsPanel } from '../features/teams/components/PairingConstraintsPanel';
@@ -16,6 +18,7 @@ import { TeamsBoard } from '../features/teams/components/TeamsBoard';
 import { useLineupDraft } from '../features/teams/hooks/useLineupDraft';
 import { useTeamLabels } from '../features/teams/hooks/useTeamLabels';
 import type { Team } from '../features/teams/types';
+import { summarizeAttendance } from '../features/teams/utils/attendance';
 import { balanceTeams, findViolatedConstraints } from '../features/teams/utils/balanceTeams';
 import type { GetLevel } from '../features/teams/utils/balanceTeams';
 import { planRecruits } from '../features/teams/utils/planRecruits';
@@ -31,7 +34,7 @@ import type { ID } from '../shared/types/common';
 const MAX_PLAYERS = 10;
 
 export function TeamBalancerPage() {
-  const { players, isLoading: isLoadingPlayers, error } = usePlayers();
+  const { players, myPlayer, isLoading: isLoadingPlayers, error } = usePlayers();
   const { matches, addMatch } = useMatches();
   const draft = useLineupDraft();
   const { canEdit } = useCurrentGroup();
@@ -50,6 +53,14 @@ export function TeamBalancerPage() {
   const selectedPlayers = players.filter((player) => draft.selectedIds.has(player.id));
   const selectedIds = new Set(selectedPlayers.map((player) => player.id));
   const isSelectionLimitReached = selectedIds.size >= MAX_PLAYERS;
+  const attendance = summarizeAttendance(players, selectedIds, draft.responses);
+
+  // Le sondage porte sur la composition en cours ; on affiche la date du prochain match programmé s'il y en a un.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const nextMatch = matches
+    .filter((match) => match.status === 'scheduled' && match.playedAt >= startOfToday)
+    .sort((a, b) => a.playedAt.getTime() - b.playedAt.getTime())[0];
 
   const playerLevels = computePlayerLevels(matches, players);
   const ratedMatchCount = matches.filter((match) => match.status === 'completed' && match.score).length;
@@ -91,7 +102,13 @@ export function TeamBalancerPage() {
   }
 
   function handleClearSelection() {
-    if (!window.confirm('Retirer tous les joueurs de la composition ? Les conditions sont conservées.')) return;
+    if (
+      !window.confirm(
+        'Retirer tous les joueurs de la composition et effacer les réponses au sondage ? Les conditions sont conservées.',
+      )
+    ) {
+      return;
+    }
     draft.clearPlayers();
     resetGeneratedTeams();
   }
@@ -143,13 +160,31 @@ export function TeamBalancerPage() {
         <h1 className="text-3xl font-bold text-foreground">Équilibrer les équipes</h1>
         <p className="mt-2 text-muted-foreground">
           {canEdit
-            ? "Coche les joueurs au fur et à mesure qu'ils confirment : la composition est enregistrée pour tout le groupe, et l'appli te dit quels profils recruter pour les places restantes."
+            ? "Les membres qui répondent « Je viens » entrent dans la composition. Coche aussi ceux qui ont confirmé autrement : la composition est enregistrée pour tout le groupe, et l'appli te dit quels profils recruter pour les places restantes."
             : 'Composition en cours du prochain match. Seuls le créateur et les admins peuvent la modifier et former les équipes.'}
         </p>
         {draft.loadError && (
           <p className="mt-3 text-sm text-red-600 dark:text-red-400">
             La composition ne peut pas être enregistrée ({draft.loadError}). As-tu relancé supabase/schema.sql ?
           </p>
+        )}
+
+        {!isLoading && !draft.loadError && (
+          <div className="mt-6 max-w-xl">
+            <AttendanceCard
+              myPlayer={myPlayer}
+              myResponse={myPlayer ? attendance.responseById.get(myPlayer.id) : undefined}
+              isInLineup={myPlayer !== null && selectedIds.has(myPlayer.id)}
+              waitlistPosition={myPlayer ? attendance.waitlist.findIndex((player) => player.id === myPlayer.id) + 1 : 0}
+              lineupCount={selectedIds.size}
+              maxPlayers={MAX_PLAYERS}
+              nextMatch={nextMatch}
+              onRespond={async (attending) => {
+                await draft.respond(attending);
+                resetGeneratedTeams();
+              }}
+            />
+          </div>
         )}
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,360px)_1fr]">
@@ -185,7 +220,12 @@ export function TeamBalancerPage() {
                   getLevel={getLevel}
                   readOnly={!canEdit}
                   selectionLimitReached={isSelectionLimitReached}
+                  responseById={attendance.responseById}
                 />
+                {draft.actionError && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{draft.actionError}</p>
+                )}
+                <AttendanceOverview summary={attendance} />
                 {isSelectionLimitReached && (
                   <p className="mt-2 text-xs text-muted-foreground">
                     Maximum atteint pour un five (10 joueurs, 2 équipes de 5).

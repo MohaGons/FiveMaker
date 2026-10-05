@@ -61,6 +61,13 @@ Plus vous jouez, plus l'équilibrage est juste : les niveaux s'ajustent tout seu
 - Fiche avec **niveau de 1 à 5**, **poste préféré** (défenseur, milieu, attaquant) et **photo**.
 - Joueurs **invités** pour les remplaçants d'un soir.
 
+### 🙋 Sondage de présence
+- Chaque membre répond **« Je viens » / « Je ne viens pas »** au prochain match, depuis la page Équipes.
+- Ceux qui viennent **entrent directement dans la composition**, jusqu'à 10 joueurs.
+- Au-delà, ils passent en **liste d'attente** : si un inscrit se désiste, le premier de la liste prend sa place.
+- L'admin voit qui vient, qui ne vient pas et **qui n'a pas encore répondu**, pour relancer sur WhatsApp.
+- « Vider » la composition repart de zéro pour le match suivant (les réponses sont effacées).
+
 ### ⚖️ Équilibrage des équipes
 - Coche les joueurs au fur et à mesure qu'ils confirment : la **composition est enregistrée pour tout le groupe**.
 - **Compo provisoire** visible avant d'avoir 10 joueurs, avec les **profils à recruter** pour les places
@@ -134,6 +141,7 @@ du groupe.
 |---|:---:|:---:|:---:|
 | Voir joueurs, matchs, stats | ✅ | ✅ | ✅ |
 | Noter les joueurs d'un match auquel on a joué | ✅ | ✅ | ✅ |
+| Répondre au sondage de présence | ✅ | ✅ | ✅ |
 | Gérer joueurs, matchs et composition | | ✅ | ✅ |
 | Inviter des membres | | ✅ | ✅ |
 | Nommer / retirer des admins, exclure | | | ✅ |

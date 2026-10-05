@@ -66,7 +66,11 @@ Code organisé par fonctionnalité dans `src/features/<feature>/` avec les sous-
   `create or replace function`, `drop policy if exists` + `create policy`, pour fonctionner sur une base
   neuve comme sur une base existante.
 - Tables : `groups`, `group_members` (rôle `owner` / `admin` / `member`), `group_invites`, `players`,
-  `matches`, `lineup_drafts` (une compo en cours par groupe), `match_ratings`, plus le bucket `avatars`.
+  `matches`, `lineup_drafts` (une compo en cours par groupe), `lineup_responses` (sondage de présence),
+  `match_ratings`, plus le bucket `avatars`.
+- `lineup_drafts.player_ids` ne doit être modifié que via les RPC `respond_to_lineup`, `set_lineup_player` et
+  `clear_lineup`, qui verrouillent la ligne (plusieurs membres répondent en même temps). Le client n'écrit
+  directement que `pairing_constraints`. La limite de 10 joueurs et la liste d'attente sont gérées côté base.
 - Les compositions d'un match sont des **instantanés JSONB** (`team_a_players`, `team_b_players`),
   indépendants des fiches joueurs actuelles ; buts et passes dans `player_stats` (jsonb indexé par id joueur).
 - Les droits sont appliqués par la **RLS** via les helpers `group_role`, `is_group_member`, `can_edit_group`,
