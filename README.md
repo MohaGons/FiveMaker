@@ -224,7 +224,7 @@ supabase/
 | UI | Tailwind CSS 4, shadcn/ui (Base UI), Lucide, police Geist |
 | Glisser-déposer | dnd-kit |
 | Back | Supabase : Postgres, Auth, Storage, Row Level Security, fonctions RPC |
-| Qualité | oxlint |
+| Qualité | oxlint, Vitest |
 
 ---
 
@@ -236,6 +236,7 @@ supabase/
 | `npm run build` | Vérification TypeScript puis build de production dans `dist/` |
 | `npm run preview` | Sert le build de production en local |
 | `npm run lint` | Analyse du code avec oxlint |
+| `npm test` | Tests de la logique métier avec Vitest (`npm run test:watch` pour relancer à chaque modification) |
 
 ---
 

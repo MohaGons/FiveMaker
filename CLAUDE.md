@@ -11,9 +11,14 @@ FiveMaker : appli web (React 19 + TypeScript + Vite + Tailwind 4 + Supabase) pou
 npm run dev       # serveur de dev (http://localhost:5173)
 npm run build     # tsc -b puis vite build : c'est la vérification de types du projet
 npm run lint      # oxlint
+npm test          # vitest run (npm run test:watch pour le mode watch)
+npx vitest run src/features/teams/utils/balanceTeams.test.ts   # un seul fichier
+npx vitest run -t "nom du test"                                 # un seul test
 ```
 
-Il n'y a pas encore de tests. Les variables `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` doivent être
+Les tests (Vitest) couvrent la logique métier pure dans `features/*/utils/`, placés à côté du fichier testé
+(`*.test.ts`). Les fabriques de données (`makePlayer`, `makeMatch`, `makeConstraint`) sont dans
+`src/test/factories.ts`. Pas de tests de composants ni d'appels Supabase. Les variables `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` doivent être
 dans `.env` (voir `.env.example`), sinon `src/shared/lib/supabaseClient.ts` lève une erreur au démarrage.
 
 ## Conventions
