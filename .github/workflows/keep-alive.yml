@@ -1,0 +1,22 @@
+# Empêche la mise en pause du projet Supabase (plan gratuit : pause après ~7 jours d'inactivité).
+# Une requête REST suffit : la RLS renvoie une liste vide, mais la base est bien sollicitée.
+name: Keep-alive Supabase
+
+on:
+  schedule:
+    - cron: "0 8 * * 1,4" # lundi et jeudi à 8h UTC
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Requête vers la base
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl --fail --silent --show-error \
+            "$SUPABASE_URL/rest/v1/groups?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
