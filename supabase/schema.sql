@@ -301,6 +301,12 @@ create policy "Group editors write lineup drafts"
   using (public.can_edit_group(group_id))
   with check (public.can_edit_group(group_id));
 
+-- Le client n'écrit que les conditions : player_ids passe uniquement par les fonctions du sondage
+-- (verrou, limite de 10, liste d'attente). group_id reste autorisé car l'upsert le réécrit.
+revoke insert, update, delete on public.lineup_drafts from anon, authenticated;
+grant insert (group_id, pairing_constraints, updated_at) on public.lineup_drafts to authenticated;
+grant update (group_id, pairing_constraints, updated_at) on public.lineup_drafts to authenticated;
+
 -- =====================================================================================================
 -- Fonctions appelées par l'appli (créer, rejoindre, inviter). "security definer" : elles font ce que
 -- les policies interdisent au client (ex. s'ajouter comme membre), après leurs propres vérifications.
