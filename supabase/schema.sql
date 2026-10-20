@@ -717,6 +717,30 @@ begin
 end;
 $$;
 
+-- Complète la composition (déjà verrouillée par lock_lineup) avec les premiers de la liste d'attente.
+create or replace function public.promote_from_waitlist(gid uuid, ids jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_player uuid;
+begin
+  for next_player in
+    select r.player_id
+    from public.lineup_responses r
+    where r.group_id = gid and r.attending and not ids ? r.player_id::text
+    order by r.responded_at
+    limit greatest(10 - jsonb_array_length(ids), 0)
+  loop
+    ids := ids || to_jsonb(next_player::text);
+  end loop;
+
+  return ids;
+end;
+$$;
+
 -- Réponse du compte connecté ; renvoie la composition à jour.
 create or replace function public.respond_to_lineup(gid uuid, attending boolean)
 returns jsonb
@@ -727,7 +751,6 @@ as $$
 declare
   my_player uuid;
   ids jsonb;
-  next_player uuid;
 begin
   if not public.is_group_member(gid) then
     raise exception 'Groupe introuvable.';
@@ -752,17 +775,7 @@ begin
       ids := ids || to_jsonb(my_player::text);
     end if;
   elsif ids ? my_player::text then
-    ids := ids - my_player::text;
-
-    select r.player_id into next_player
-    from public.lineup_responses r
-    where r.group_id = gid and r.attending and not ids ? r.player_id::text
-    order by r.responded_at
-    limit 1;
-
-    if next_player is not null then
-      ids := ids || to_jsonb(next_player::text);
-    end if;
+    ids := public.promote_from_waitlist(gid, ids - my_player::text);
   end if;
 
   update public.lineup_drafts set player_ids = ids, updated_at = now() where group_id = gid;
@@ -770,7 +783,8 @@ begin
 end;
 $$;
 
--- Un admin coche ou décoche un joueur ; renvoie la composition à jour.
+-- Un admin coche ou décoche un joueur (la place libérée revient à la liste d'attente) ; renvoie la
+-- composition à jour.
 create or replace function public.set_lineup_player(gid uuid, pid uuid, included boolean)
 returns jsonb
 language plpgsql
@@ -794,8 +808,10 @@ begin
       raise exception 'La composition est déjà complète (10 joueurs).';
     end if;
     ids := ids || to_jsonb(pid::text);
-  elsif not included then
-    ids := ids - pid::text;
+  elsif not included and ids ? pid::text then
+    -- Retiré par un admin : sa réponse « je viens » est effacée, sinon il repasserait en liste d'attente.
+    delete from public.lineup_responses where group_id = gid and player_id = pid;
+    ids := public.promote_from_waitlist(gid, ids - pid::text);
   end if;
 
   update public.lineup_drafts set player_ids = ids, updated_at = now() where group_id = gid;
@@ -822,6 +838,7 @@ end;
 $$;
 
 revoke execute on function public.lock_lineup(uuid) from public, anon, authenticated;
+revoke execute on function public.promote_from_waitlist(uuid, jsonb) from public, anon, authenticated;
 revoke execute on function public.respond_to_lineup(uuid, boolean) from public, anon;
 revoke execute on function public.set_lineup_player(uuid, uuid, boolean) from public, anon;
 revoke execute on function public.clear_lineup(uuid) from public, anon;

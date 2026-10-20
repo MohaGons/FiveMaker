@@ -153,6 +153,8 @@ export function useLineupDraft() {
     const included = !draft.playerIds.includes(id);
     if (included && draft.playerIds.length >= maxPlayers) return;
 
+    // Décoché : la base efface sa réponse au sondage et donne sa place au premier de la liste d'attente.
+    if (!included) setResponses((current) => current.filter((response) => response.playerId !== id));
     void writePlayers(
       (ids) => (included ? [...ids, id] : ids.filter((playerId) => playerId !== id)),
       () => setLineupPlayer(groupId, id, included),
