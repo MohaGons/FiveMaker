@@ -890,3 +890,30 @@ create policy "Avatars are listed by their owner"
   for select
   to authenticated
   using (bucket_id = 'avatars' and public.can_write_avatar_folder((storage.foldername(name))[1]));
+
+-- =====================================================================================================
+-- Keep-alive : appelé chaque jour par le workflow GitHub (.github/workflows/keep-alive.yml) pour éviter la
+-- mise en pause du plan gratuit. Une simple lecture anonyme ne compte pas comme activité suffisante :
+-- la fonction écrit donc vraiment en base (une seule ligne, mise à jour à chaque appel).
+-- =====================================================================================================
+
+create table if not exists public.keep_alive (
+  id int primary key default 1 check (id = 1),
+  pinged_at timestamptz not null default now()
+);
+
+-- Aucune policy : la table n'est accessible que par la fonction ci-dessous.
+alter table public.keep_alive enable row level security;
+
+create or replace function public.keep_alive()
+returns timestamptz
+language sql
+security definer
+set search_path = public
+as $$
+  insert into public.keep_alive (id, pinged_at) values (1, now())
+  on conflict (id) do update set pinged_at = excluded.pinged_at
+  returning pinged_at
+$$;
+
+grant execute on function public.keep_alive() to anon, authenticated;
